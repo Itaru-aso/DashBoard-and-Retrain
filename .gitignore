@@ -1,0 +1,35 @@
+# === OMC セッション状態（プロジェクト成果物ではない） ===
+.omc/
+
+# === 大容量バイナリ（画像・モデルは git で管理しない） ===
+*.bmp
+*.pth
+*.onnx
+*.pt
+*.ckpt
+*.safetensors
+
+# === 環境変数・秘密情報（DATABASE_URL / BASIC_AUTH_PASS 等） ===
+.env
+.env.*
+
+# === Python ===
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# === Node / フロントエンド ===
+node_modules/
+dist/
+frontend/dist/
+
+# === OS / エディタ ===
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
