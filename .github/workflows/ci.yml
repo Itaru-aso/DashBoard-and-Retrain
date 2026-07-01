@@ -1,0 +1,178 @@
+name: CI
+
+# 配置先: .github/workflows/ci.yml
+# PR を使わず main へ直接コミットする運用のため、main への push で必ず走らせ、
+# 「壊れたコードが main に乗った」ことを即検知する。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# 最小権限（読み取りのみ）
+permissions:
+  contents: read
+
+jobs:
+  # ───────────────────────── 存在検知（ガード） ─────────────────────────
+  # backend/ ・ frontend/ はこれから cc-sdd で実装するフェーズ。まだ無い段階で
+  # pytest / npm ci を叩くと即赤になるため、存在を判定して該当 job を skip する
+  # （skip は灰色＝赤い main を作らない）。コードが揃えば自動で有効化される。
+  detect:
+    name: Detect project layout
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.check.outputs.backend }}
+      frontend: ${{ steps.check.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          backend=false
+          frontend=false
+          if [ -d backend ] && { [ -f backend/requirements.txt ] || [ -f backend/pyproject.toml ]; }; then
+            backend=true
+          fi
+          if [ -f frontend/package-lock.json ]; then
+            frontend=true
+          fi
+          echo "backend=$backend"   >> "$GITHUB_OUTPUT"
+          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+          echo "detected -> backend=$backend frontend=$frontend"
+
+  # ───────────────────────── Backend (FastAPI) ─────────────────────────
+  backend:
+    name: Backend (FastAPI)
+    needs: detect
+    if: needs.detect.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend          # ver2 バックエンド。training/ は repo 直下＝lint 対象外
+
+    # テスト用の使い捨て PostgreSQL。本番 app_db には絶対に接続しない。
+    services:
+      postgres:
+        image: postgres:14                  # ver2 DB に合わせる（ver1 compose 踏襲）。app_db(=PG17)は読み取り専用で CI 対象外
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U testuser"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # ドライバは psycopg2 → "postgresql://"（tech.md 準拠）
+      DATABASE_URL: postgresql://testuser:testpass@localhost:5432/test_db
+      # config.py は INSPECTION_DATABASE_URL も必須（未設定だと import 時に fail-fast）。
+      # テストは app_db を実接続しない（sqlite フェイク/スナップショット）ため、同じ使い捨て DB を指す。
+      INSPECTION_DATABASE_URL: postgresql://testuser:testpass@localhost:5432/test_db
+      # 認証はテストで override するため CI では無効化（有効だと BASIC_AUTH_PASS 必須）
+      ENABLE_BASIC_AUTH: "false"
+      ENVIRONMENT: test
+      LOG_LEVEL: WARNING
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"            # tech.md 準拠
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt   # poetry/uv 運用なら差し替え
+          elif [ -f pyproject.toml ]; then
+            pip install -e .
+          fi
+          # 依存に含まれていなければ明示（tech.md の検証ゲート/テスト基盤）
+          pip install black flake8 mypy pytest pytest-cov pytest-asyncio pytest-mock httpx
+
+      # 以降の検査は対象ディレクトリ（src / tests）が生えてから有効化する。
+      - name: Format check (black, 行長100)
+        if: hashFiles('backend/**/*.py') != ''
+        run: |
+          targets=""
+          [ -d src ]   && targets="$targets src"
+          [ -d tests ] && targets="$targets tests"
+          if [ -n "$targets" ]; then
+            black --check --line-length 100 $targets   # 行長は pyproject.toml でも統一
+          else
+            echo "src/tests がまだ無いので skip"
+          fi
+
+      - name: Lint (flake8)
+        if: hashFiles('backend/**/*.py') != ''
+        run: |
+          targets=""
+          [ -d src ]   && targets="$targets src"
+          [ -d tests ] && targets="$targets tests"
+          if [ -n "$targets" ]; then
+            flake8 $targets                            # extend-ignore = E203,W503（.flake8 / setup.cfg）
+          else
+            echo "src/tests がまだ無いので skip"
+          fi
+
+      - name: Type check (mypy)
+        if: hashFiles('backend/src/**/*.py') != ''
+        run: mypy src
+
+      # ver2 の自己管理マイグレーションが使い捨て DB にきれいに当たるか検証（app_db は対象外）。
+      # alembic.ini / env.py が DATABASE_URL を読み、target_metadata=Base（ver2）であること。
+      - name: Alembic migrations apply cleanly
+        if: hashFiles('backend/alembic/versions/*.py') != ''
+        run: alembic upgrade head
+
+      - name: Run tests (coverage gate ≥80)
+        if: hashFiles('backend/tests/**/*.py') != ''
+        run: pytest --cov=src --cov-report=term-missing --cov-fail-under=80
+
+  # ───────────────────────── Frontend (React/TS) ─────────────────────────
+  frontend:
+    name: Frontend (React/TS)
+    needs: detect
+    if: needs.detect.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # スクリプト未定義の段階では --if-present で skip し、揃ったら自動で有効化
+      - name: Lint (eslint)
+        run: npm run lint --if-present
+
+      - name: Type check (tsc)
+        if: hashFiles('frontend/tsconfig.json') != ''
+        run: npx tsc --noEmit
+
+      - name: Build (vite)
+        run: npm run build --if-present
+
+      - name: Test (vitest)
+        run: npm test --if-present
