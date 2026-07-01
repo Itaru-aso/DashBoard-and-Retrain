@@ -22,7 +22,7 @@
   - テスト: `pytest` が収集できる・lint/型チェックが走る（最小のダミーテスト）。
   - commit: `chore(foundation): project scaffolding and tooling`
 
-- [ ] **2. 設定 `config.py`**（F1）
+- [x] **2. 設定 `config.py`**（F1）
   - `pydantic-settings` で全 env を定義。必須未設定は起動時例外（fail-fast）。`settings` 単一インスタンス。
   - テスト（unit）: 必須欠如で例外／値の読み込み。
   - Refs: F1 ／ commit: `feat(foundation): add settings (pydantic-settings)`
