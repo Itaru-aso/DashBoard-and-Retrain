@@ -16,7 +16,7 @@
 
 ## タスク (Tasks)
 
-- [ ] **1. プロジェクト雛形・ツール設定**（F11 ツール）
+- [x] **1. プロジェクト雛形・ツール設定**（F11 ツール）
   - `backend/`・`frontend/` の雛形、`pyproject.toml`（`black`/`flake8`/`mypy`/`pytest`＋cov・マーカー
     `unit`/`integration`/`api`）、`.env.example`。
   - テスト: `pytest` が収集できる・lint/型チェックが走る（最小のダミーテスト）。

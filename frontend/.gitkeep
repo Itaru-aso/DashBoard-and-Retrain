@@ -1,0 +1,3 @@
+# frontend/ 配置プレースホルダ
+# 本格的なフロント雛形（Vite + React + TS / vitest / eslint / tsconfig 等）は
+# foundation タスク 11「フロント骨格」で構築する。本ファイルはディレクトリ確保用。

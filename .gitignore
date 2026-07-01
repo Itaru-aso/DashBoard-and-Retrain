@@ -12,6 +12,9 @@
 # === 環境変数・秘密情報（DATABASE_URL / BASIC_AUTH_PASS 等） ===
 .env
 .env.*
+# サンプルはコミット対象（実値は含めない）
+!.env.example
+!**/.env.example
 
 # === Python ===
 __pycache__/

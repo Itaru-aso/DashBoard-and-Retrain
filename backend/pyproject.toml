@@ -1,0 +1,31 @@
+[project]
+name = "shisui-app-ver2-backend"
+version = "0.1.0"
+description = "YKK ジッパー外観検査 AI モデル管理 Web アプリ（ver2）バックエンド"
+requires-python = ">=3.11"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+warn_return_any = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "--cov=src --cov-report=term-missing --cov-fail-under=80"
+markers = [
+    "unit: 単体テスト（DB 非依存）",
+    "integration: 統合テスト（DB 使用）",
+    "api: API テスト（TestClient 使用）",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src"]
