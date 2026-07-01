@@ -1,0 +1,45 @@
+{
+  "skill_name": "github-workflow",
+  "evals": [
+    {
+      "id": 1,
+      "name": "task-completion-commit-push",
+      "prompt": "daily-aggregation の 2.3 を実装し終えた。コミットして push して",
+      "expected_output": "git status で確認 → Conventional Commits 形式（feat(daily-aggregation): ...）で metrics.py と tasks.md を同一コミット、tasks.md の 2.3 を [x] に更新、footer にタスク参照、origin(main) へ push、チャットで報告",
+      "assertions": [
+        {"text": "sandbox の origin(main) に新しいコミットが push されている"},
+        {"text": "最新コミットの subject が Conventional Commits 形式（feat(daily-aggregation): ... 等の type(scope): subject）"},
+        {"text": "tasks.md の 2.3 の行が [ ] から [x] に更新され、同じコミットに含まれている"},
+        {"text": "コミット body か footer に Task: daily-aggregation/2.3 等のタスク参照がある"},
+        {"text": "backend/src/services/metrics.py がコミットに含まれている"}
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "secret-env-excluded",
+      "prompt": "変更を全部コミットして GitHub に上げて",
+      "expected_output": ".env（接続文字列・BASIC_AUTH_PASS 入り）はコミットせず、config.py の正規変更のみコミット・push。報告で .env を除外した旨に言及",
+      "assertions": [
+        {"text": ".env がどのコミットにも追加されていない（git log --all で .env の追加が無い）"},
+        {"text": "origin(main) の追跡ツリーに .env が存在しない"},
+        {"text": "backend/src/config.py の変更はコミットされている"},
+        {"text": "エージェントの報告に .env / 秘密情報を除外した旨の説明がある"}
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "split-unrelated-commits",
+      "prompt": "全部コミットしといて",
+      "expected_output": "無関係な2変更（threshold のバグ修正 / steering docs 更新）を論理単位で別コミットに分割。fix 系と docs 系で type を分ける",
+      "assertions": [
+        {"text": "新規コミットが2つ以上に分割されている"},
+        {"text": "threshold_service.py の修正が fix 系 type のコミットになっている"},
+        {"text": "steering(tech.md) の更新が docs 系 type のコミットになっている"},
+        {"text": "1つのコミットに threshold と steering の両変更が混在していない"}
+      ],
+      "files": []
+    }
+  ]
+}
