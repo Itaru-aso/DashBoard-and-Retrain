@@ -117,7 +117,7 @@ Web 三層アーキテクチャ + 1つの独立プロセス（モデル再学習
 
 ## コーディング規約 (Coding Conventions)
 
-- **Python**: black（行長 88）、flake8（`extend-ignore = E203, W503`）、mypy。
+- **Python**: black（**行長 100**）、flake8（`extend-ignore = E203, W503`・`max-line-length = 100`）、mypy。
   docstring・コメントは日本語。
 - **TypeScript**: strict 有効、`noUnusedLocals` / `noUnusedParameters`、ESLint。
 - **TDD**: 1タスク = 1テスト + 1実装 + 1コミット。カバレッジ目標 **80% 以上**
