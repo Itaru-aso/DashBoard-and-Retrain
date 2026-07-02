@@ -77,7 +77,7 @@
   - テスト（Vitest + Testing Library）: 一覧/フィルタ・状態遷移操作・コメント追記。
   - Refs: R3, R4, R5 ／ commit: `feat(task): add task management screen`
 
-- [ ] **10. 仕上げ: 検証ゲート確認**
+- [x] **10. 仕上げ: 検証ゲート確認**
   - 全テスト・`black`/`flake8`/`mypy`、front の `tsc --noEmit`/`eslint`/`vitest` をグリーンに。カバレッジ 80% 以上。
   - commit: `chore(task): satisfy verification gate`
 
