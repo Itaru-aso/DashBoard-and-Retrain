@@ -44,7 +44,8 @@
     部分ユニーク（アクティブ高々1件）、状態遷移の前進可・逆遷移/段飛ばし拒否、コメント追記、一覧フィルタ。
   - Refs: R2, R3, R4, R5 ／ commit: `feat(task): add task repository (upsert, transitions, comments, list)`
 
-- [ ] **5. 共有メトリクス算出 `services/metrics.py`**（ダッシュボード未実装の場合に切り出し）
+- [x] **5. 共有メトリクス算出 `services/metrics.py`**（ダッシュボード未実装の場合に切り出し）
+  - ※ 日次集計基盤（agg）で実装済み（`services/metrics.py`＝所有・`test_metrics.py`）。本 spec は呼び出して使う。
   - 件数→率算出（`NG率`・KPI＝ラベル0件 NULL・`スループット`）。JST 日次・フルタプル。
   - テスト（unit/integration）: 率算出・KPI NULL・monochro=0 除外。
   - Refs: R1（メトリクス）／ commit: `feat(metrics): extract shared metric computation`
