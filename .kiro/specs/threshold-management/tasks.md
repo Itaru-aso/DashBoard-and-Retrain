@@ -30,7 +30,7 @@
   - テスト（integration）: 保存→取得の round-trip、型・enum の往復。
   - Refs: data model ／ commit: `feat(threshold): add Threshold ORM model`
 
-- [ ] **3. Pydantic スキーマ**
+- [x] **3. Pydantic スキーマ**
   - `src/schemas/threshold.py`: 作成/更新/出力。バリデーション（metric enum・値域 0–100・`valid_to > valid_from`・
     スコープ整合: per_color なら色4項目必須・global なら色項目無し）。
   - テスト（unit）: 各バリデーションの正常／異常。
