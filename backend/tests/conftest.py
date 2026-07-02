@@ -38,6 +38,10 @@ os.environ.setdefault(
     "INSPECTION_DATABASE_URL", "postgresql+psycopg2://test:test@localhost:5432/app_db_test"
 )
 
+# testcontainers の Ryuk（リソース回収コンテナ）を無効化する。コンテナはコンテキスト
+# マネージャで明示停止するため Ryuk は不要で、その起動失敗（ポート割当の断続エラー）を避ける。
+os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
+
 # tests/ -> backend/
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 

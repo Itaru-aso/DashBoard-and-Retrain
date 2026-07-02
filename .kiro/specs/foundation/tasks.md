@@ -67,7 +67,7 @@
   - テスト（integration）: 起動/停止・ジョブ登録・無効化フラグ。
   - Refs: F6 ／ commit: `feat(foundation): add in-app scheduler base (APScheduler)`
 
-- [ ] **10. アプリ骨格 `main.py`**（F7）
+- [x] **10. アプリ骨格 `main.py`**（F7）
   - `FastAPI` 生成・lifespan（スケジューラ起動/停止）・ルーター登録の集約・`/health`
     （**ver2 DB 必須＋業者 DB 参考**）・本番 `dist/` 静的配信＋SPA フォールバック。
   - テスト（api）: `/health`（ver2 必須・業者参考の表現）／起動が通る。
