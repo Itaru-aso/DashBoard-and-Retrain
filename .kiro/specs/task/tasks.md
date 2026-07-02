@@ -37,7 +37,7 @@
   - テスト（unit）: enum・状態遷移入力・フィルタの検証（正常／異常）。
   - Refs: R3, R5 ／ commit: `feat(task): add task schemas`
 
-- [ ] **4. Repository: upsert・状態遷移・コメント・一覧**
+- [x] **4. Repository: upsert・状態遷移・コメント・一覧**
   - `src/repositories/task_repository.py`（ver2 エンジン）: `find_active(key)`・`create`・`overwrite`・
     `transition_status`（前進のみ）・`append_comment`・`list`(filter)。
   - テスト（integration）: upsert 4 系統（無→新規／`OPEN`→上書き／`IN_PROGRESS`→保持／`DONE` のみ→新規＝再発）、
