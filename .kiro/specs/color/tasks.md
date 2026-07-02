@@ -59,7 +59,7 @@
     一方向（実生産は対象外・後戻りなし）／冪等。
   - Refs: C-R2, C-R3, C-R4 ／ commit: `feat(color): add lifecycle auto-transition service`
 
-- [ ] **7. スケジューラ: 日次ジョブ**
+- [x] **7. スケジューラ: 日次ジョブ**
   - `src/jobs/color_lifecycle_job.py`（`color_lifecycle_service.evaluate(window)` を呼ぶ薄い層）、`main.py` 起動時に**日次**登録
     （保守タスクの逸脱判定と同じアプリ内スケジューラ・単一ワーカ所有・`*_ENABLED`）。
   - テスト（integration）: ジョブが評価サービスを呼ぶ／無効化／冪等。
