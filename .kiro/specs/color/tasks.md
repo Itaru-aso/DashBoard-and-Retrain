@@ -51,7 +51,7 @@
     不正行レポート・重複タプルは status 保持。
   - Refs: C-R1 ／ commit: `feat(color): add color list import service`
 
-- [ ] **6. Service: ライフサイクル自動遷移（日次・冪等）**
+- [x] **6. Service: ライフサイクル自動遷移（日次・冪等）**
   - `src/services/color_lifecycle_service.py`: **未実施→量産検証**（`daily_metrics` に当該フルタプルの集計行が有れば遷移・`verification_at`）、
     **量産検証→実生産**（`daily_metrics` 号機合算を `services/metrics.py` で率算出し、`虚報率≤1.5%` かつ `見逃し率≤0.05%` を同時達成した日が
     1 日でも有れば昇格・`production_at`。ラベルのある日のみ・固定基準）。**一方向・冪等**。Service 層で突合（越境結合なし）。
