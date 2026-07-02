@@ -18,7 +18,7 @@
 
 ## タスク (Tasks)
 
-- [ ] **1. マイグレーション: `daily_metrics`**（ver2 DB）
+- [x] **1. マイグレーション: `daily_metrics`**（ver2 DB）
   - `jst_date`・`color_no`・`size`・`chain`・`tape`・`unit`・`monochro_count`・`ng_count`・`fp_num`・`miss_num`・
     `annotated_count`・`computed_at`。**ユニーク** `(jst_date,color_no,size,chain,tape,unit)`（`tape` 空文字可）。
   - テスト（integration）: upgrade/downgrade、ユニーク制約。

@@ -32,7 +32,8 @@ def test_alembic_upgrade_head_applies_empty_baseline(
     cfg = Config(str(BACKEND_DIR / "alembic.ini"))
     cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
 
-    command.upgrade(cfg, "head")
+    # ベースライン revision を明示（後続マイグレーションを含めず空ベースラインのみ検証）。
+    command.upgrade(cfg, "0001_empty_baseline")
 
     engine = create_engine(db_url)
     try:
