@@ -24,7 +24,7 @@
   - テスト（integration）: upgrade/downgrade、`name` ユニークを制約が弾く。
   - Refs: E-R1 ／ commit: `feat(edge): add edge_pc table migration`
 
-- [ ] **2. ORM モデル `EdgePc`**
+- [x] **2. ORM モデル `EdgePc`**
   - `src/models/edge_pc.py`。
   - テスト（integration）: round-trip。
   - commit: `feat(edge): add EdgePc ORM model`
