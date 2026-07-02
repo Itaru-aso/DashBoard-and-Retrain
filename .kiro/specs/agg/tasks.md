@@ -24,7 +24,7 @@
   - テスト（integration）: upgrade/downgrade、ユニーク制約。
   - Refs: A-R1 ／ commit: `feat(agg): add daily_metrics migration`
 
-- [ ] **2. ORM モデル `DailyMetrics`**
+- [x] **2. ORM モデル `DailyMetrics`**
   - `src/models/daily_metrics.py`。
   - テスト（integration）: round-trip。
   - commit: `feat(agg): add DailyMetrics model`
