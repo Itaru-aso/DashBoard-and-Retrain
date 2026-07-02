@@ -2,3 +2,5 @@
 # テストは使い捨ての Postgres コンテナを起動し、認証情報を自動生成する（conftest.py）。
 # CI で TEST_DATABASE_URL を与える場合は testcontainers を起動しないため必須ではない。
 testcontainers[postgres]>=4,<5
+# FastAPI TestClient 用（api テスト）。CI でも明示インストール済み。
+httpx

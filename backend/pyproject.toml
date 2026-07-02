@@ -3,6 +3,15 @@ name = "shisui-app-ver2-backend"
 version = "0.1.0"
 description = "YKK ジッパー外観検査 AI モデル管理 Web アプリ（ver2）バックエンド"
 requires-python = ">=3.11"
+# 実行時依存（tech.md の技術スタック準拠）。CI は `pip install -e .` で導入する。
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "sqlalchemy>=2,<3",
+    "alembic",
+    "psycopg2-binary",
+    "pydantic-settings",
+]
 
 [tool.black]
 line-length = 100

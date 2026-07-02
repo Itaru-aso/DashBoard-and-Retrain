@@ -56,7 +56,7 @@
   - テスト（unit/integration）: `ExternalBase` のテーブルが Alembic autogenerate の対象に**入らない**こと。
   - Refs: F4 ／ commit: `feat(foundation): add external read-only model base`
 
-- [ ] **8. 認証ゲート `api/security.py`**（F5）
+- [x] **8. 認証ゲート `api/security.py`**（F5）
   - `HTTPBasic` 依存で**単一共有クレデンシャル**を定数時間比較。`ENABLE_BASIC_AUTH` で無効化。API へ適用（`/health` 除外）。
   - テスト（api）: 認証なし→401／正しい資格→通過／無効化時は素通り。
   - Refs: F5 ／ commit: `feat(foundation): add basic auth gate (shared credential)`
