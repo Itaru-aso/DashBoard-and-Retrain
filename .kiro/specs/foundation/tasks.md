@@ -73,7 +73,7 @@
   - テスト（api）: `/health`（ver2 必須・業者参考の表現）／起動が通る。
   - Refs: F7 ／ commit: `feat(foundation): add app skeleton and health endpoint`
 
-- [ ] **11. フロント骨格**（F10）
+- [x] **11. フロント骨格**（F10）
   - React + Vite + TS 雛形、`api/client.ts`（axios・`baseURL=/api`）、TanStack Query Provider、ルーティング、`build → dist`。
   - テスト（vitest）: ルート描画・client 構成の最小テスト。
   - Refs: F10 ／ commit: `feat(foundation): add frontend skeleton`
