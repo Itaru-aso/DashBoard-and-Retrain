@@ -32,7 +32,7 @@
   - テスト（unit）: 初期化・レベル反映。
   - Refs: F8 ／ commit: `feat(foundation): add plain logging config`
 
-- [ ] **4. ver2 `Base` ＋ Alembic（空ベースライン）**（F3）
+- [x] **4. ver2 `Base` ＋ Alembic（空ベースライン）**（F3）
   - `Base`（ver2 declarative）。`alembic.ini`・`alembic/env.py`（`target_metadata = Base.metadata`・`DATABASE_URL`）。
     **空の初期マイグレーション**を1つ。
   - テスト（integration）: `alembic upgrade head` がテスト DB に通る（空ベースライン適用）。
