@@ -50,7 +50,7 @@
   - テスト（integration）: `get_db` の commit・rollback／`get_inspection_db` で読める／業者 DB 断で例外を捕捉できる。
   - Refs: F2 ／ commit: `feat(foundation): add dual-engine db connections`
 
-- [ ] **7. 業者外部モデル基盤 `models/external/`**（F4）
+- [x] **7. 業者外部モデル基盤 `models/external/`**（F4）
   - **別宣言基盤 `ExternalBase`**（**Alembic の `target_metadata` に含めない**）。手書き読み取り専用モデルのパターン
     （サンプル1つ・具体は各機能）。
   - テスト（unit/integration）: `ExternalBase` のテーブルが Alembic autogenerate の対象に**入らない**こと。
