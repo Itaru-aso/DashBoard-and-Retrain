@@ -25,7 +25,7 @@
     制約が効く＝重複・値域外・期間逆転・スコープ不整合の INSERT が DB に弾かれる。
   - Refs: R1.2–R1.5, R3.5 ／ commit: `feat(threshold): add threshold table migration with exclusion constraints`
 
-- [ ] **2. ORM モデル `Threshold`**
+- [x] **2. ORM モデル `Threshold`**
   - `src/models/threshold.py`。全カラム・enum・timestamptz をマッピング。
   - テスト（integration）: 保存→取得の round-trip、型・enum の往復。
   - Refs: data model ／ commit: `feat(threshold): add Threshold ORM model`
