@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
+from src.models.external.annotation_item import AnnotationItem
 from src.models.external.base import ExternalBase
+from src.models.external.dataset_category_item import DatasetCategoryItem
 from src.models.external.image_base import ImageBase
 
-__all__ = ["ExternalBase", "ImageBase"]
+__all__ = ["ExternalBase", "ImageBase", "AnnotationItem", "DatasetCategoryItem"]
