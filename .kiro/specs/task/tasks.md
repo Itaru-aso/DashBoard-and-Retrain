@@ -71,7 +71,7 @@
   - テスト（api / TestClient）: ステータス（200/409/422）、状態遷移違反 409、コメント追加、evaluate、一覧、認証。
   - Refs: R1.4, R3, R4, R5, R6 ／ commit: `feat(task): add task API endpoints`
 
-- [ ] **9. フロント: タスク管理画面**
+- [x] **9. フロント: タスク管理画面**
   - `frontend/src/api/taskApi.ts`、TanStack Query フック、`frontend/src/pages/TaskList.tsx`
     （一覧・フィルタ・詳細・状態遷移・コメント追記）。
   - テスト（Vitest + Testing Library）: 一覧/フィルタ・状態遷移操作・コメント追記。

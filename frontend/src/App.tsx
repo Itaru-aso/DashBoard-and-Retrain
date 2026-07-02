@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 
 import Dashboard from "@/pages/Dashboard";
+import TaskList from "@/pages/TaskList";
 import ThresholdManagement from "@/pages/ThresholdManagement";
 
 function Home() {
@@ -12,6 +13,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/tasks" element={<TaskList />} />
       <Route path="/thresholds" element={<ThresholdManagement />} />
     </Routes>
   );
