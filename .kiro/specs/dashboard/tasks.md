@@ -29,7 +29,7 @@
   - テスト（integration / 業者 DB スナップショット）: 業者エンジンで読める／接続断時に致命的に落ちない。
   - Refs: `tech.md` 2エンジン ／ commit: `feat(dashboard): add inspection DB engine and read-only models`
 
-- [ ] **2. Repository: 集計クエリ + 明細クエリ**
+- [x] **2. Repository: 集計クエリ + 明細クエリ**
   - `src/repositories/inspection_result_repository.py`（業者エンジン・読み取り専用）:
     - 集計: 期間・色・**号機（任意・複数可・既定 全号機）**で絞り `日次 × color_no × size × chain (× tape)` で
       `monochro_count` / `ng_count` / `fp_num` / `miss_num` / `label_count` を取得（`HAVING monochro_count > 0`）。
