@@ -29,7 +29,7 @@
   - テスト（integration）: round-trip。
   - commit: `feat(agg): add DailyMetrics model`
 
-- [ ] **3. 共有メトリクス `services/metrics.py`**
+- [x] **3. 共有メトリクス `services/metrics.py`**
   - 件数→率: `throughput=monochro`・`ng_rate=ng/monochro`・`false_alarm_rate=annotated==0?NULL:fp/monochro`・
     `miss_rate=annotated==0?NULL:miss/monochro`。`monochro==0` 除外。**ダッシュボード/保守タスク/色 と共有**。
   - テスト（unit）: 率・NULL（annotated=0）・monochro=0 除外。
