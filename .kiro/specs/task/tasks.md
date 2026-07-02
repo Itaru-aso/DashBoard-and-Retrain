@@ -27,7 +27,7 @@
   - テスト（integration）: upgrade/downgrade、制約が効く（同キーのアクティブ重複 INSERT を DB が弾く）。
   - Refs: R2.5 ／ commit: `feat(task): add task table migration with partial unique constraint`
 
-- [ ] **2. ORM モデル `Task`**
+- [x] **2. ORM モデル `Task`**
   - `src/models/task.py`（全カラム・enum・`comments` JSONB・timestamptz）。
   - テスト（integration）: 保存→取得の round-trip、enum、JSONB の往復。
   - commit: `feat(task): add Task ORM model`
