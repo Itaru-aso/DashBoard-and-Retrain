@@ -30,6 +30,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
+# src.config / src.database の import 時 fail-fast を防ぐための安全な既定 env。
+# 実 env（CI の DATABASE_URL 等）は setdefault のため上書きしない。個別テストは
+# monkeypatch で上書き/削除できる（設定の fail-fast テスト等）。
+os.environ.setdefault("DATABASE_URL", "postgresql+psycopg2://test:test@localhost:5432/ver2_test")
+os.environ.setdefault(
+    "INSPECTION_DATABASE_URL", "postgresql+psycopg2://test:test@localhost:5432/app_db_test"
+)
+
 # tests/ -> backend/
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 

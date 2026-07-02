@@ -44,7 +44,7 @@
   - テスト（integration）: ROLLBACK 隔離が効く（テスト間でデータが残らない）。
   - Refs: F9 ／ commit: `test(foundation): add conftest db fixtures and wiring`
 
-- [ ] **6. 2エンジン DB 接続 `database.py`**（F2）
+- [x] **6. 2エンジン DB 接続 `database.py`**（F2）
   - `ver2_engine`/`inspection_engine`（`pool_pre_ping`）・`SessionLocal`/`InspectionSessionLocal`・
     `get_db`（commit/rollback/close）・`get_inspection_db`（**非 commit・SELECT 専用**）。接続断の捕捉方針。
   - テスト（integration）: `get_db` の commit・rollback／`get_inspection_db` で読める／業者 DB 断で例外を捕捉できる。
