@@ -18,7 +18,7 @@
 
 ## タスク (Tasks)
 
-- [ ] **1. 補填マイグレーション: `threshold` テーブル**
+- [x] **1. 補填マイグレーション: `threshold` テーブル**
   - `alembic/versions/<rev>_create_threshold.py` を作成。冒頭で `CREATE EXTENSION IF NOT EXISTS btree_gist`。
   - カラム・`CHECK`（値域・期間逆転・metric/scope enum・スコープ整合）・**部分排他制約2本**（per_color / global）・索引。
   - テスト（integration / 使い捨てまたはテスト DB）: upgrade/downgrade が通る。
