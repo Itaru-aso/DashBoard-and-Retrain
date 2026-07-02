@@ -1,0 +1,68 @@
+# 開発用 docker-compose（tech.md コンテナ構成）。
+#   - ver2-db      : ver2 DB（自前・読み書き・独立ボリューム）
+#   - inspection-db: 業者検査 DB 代役（dump ロードは scripts/ で後日。ここは空の代役）
+#   - backend      : ver2 バックエンド（API＋スケジューラ＋再学習。uvicorn --workers 1）
+#
+# 本番の業者検査 DB はコンテナ化せず、INSPECTION_DATABASE_URL で外部へ読み取り接続する。
+# フロントは開発では Vite devserver（別プロセス）。本番は backend が dist/ を配信する。
+
+services:
+  ver2-db:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: shisui
+      POSTGRES_PASSWORD: shisui
+      POSTGRES_DB: ver2
+    volumes:
+      - ver2-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shisui -d ver2"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  inspection-db:
+    # 業者検査 DB（app_db）の代役。実 dump は scripts/ で投入する（後日）。
+    image: postgres:14
+    environment:
+      POSTGRES_USER: readonly
+      POSTGRES_PASSWORD: readonly
+      POSTGRES_DB: app_db
+    volumes:
+      - inspection-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U readonly -d app_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg2://shisui:shisui@ver2-db:5432/ver2
+      INSPECTION_DATABASE_URL: postgresql+psycopg2://readonly:readonly@inspection-db:5432/app_db
+      ENVIRONMENT: development
+      LOG_LEVEL: INFO
+      ENABLE_BASIC_AUTH: "false"
+    ports:
+      - "8000:8000"
+    depends_on:
+      ver2-db:
+        condition: service_healthy
+      inspection-db:
+        condition: service_healthy
+    # GPU/CUDA と再学習(torch) は後日追補（GPU 確定後）。ベースイメージを nvidia/cuda 系へ
+    # 差し替えたうえで、下記のように GPU を渡す（ver1 compose 実績）。
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+volumes:
+  ver2-db-data:
+  inspection-db-data:

@@ -78,7 +78,7 @@
   - テスト（vitest）: ルート描画・client 構成の最小テスト。
   - Refs: F10 ／ commit: `feat(foundation): add frontend skeleton`
 
-- [ ] **12. コンテナ `Dockerfile` / `docker-compose.yml`**（F11）
+- [x] **12. コンテナ `Dockerfile` / `docker-compose.yml`**（F11）
   - バックエンド `Dockerfile`（非 root・`/health`・`uvicorn --workers 1`）、`docker-compose`
     （dev: ver2 バックエンド＋ver2 DB〔独立・ボリューム〕＋業者 DB 代役〔dump〕）。
   - **ベースイメージ・GPU/CUDA の取り込みは後日決定**（本タスクでは骨組みまで。GPU 確定後に追補）。

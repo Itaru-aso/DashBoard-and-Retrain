@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "shisui-app-ver2-backend"
 version = "0.1.0"
@@ -13,6 +17,10 @@ dependencies = [
     "pydantic-settings",
     "APScheduler>=3,<4",
 ]
+
+[tool.setuptools.packages.find]
+# アプリのパッケージは src のみ（tests / alembic を配布物に含めない）。
+include = ["src*"]
 
 [tool.black]
 line-length = 100

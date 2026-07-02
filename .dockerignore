@@ -1,0 +1,20 @@
+# ビルドコンテキストから除外（イメージに不要・肥大化防止）
+.git
+.github
+.kiro
+.omc
+docs
+frontend
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/*.egg-info
+**/.venv
+**/venv
+.coverage
+htmlcov
+backend/tests
+backend/requirements-dev.txt
+**/.env
+**/.env.*
