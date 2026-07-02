@@ -103,7 +103,9 @@ jobs:
             pip install -e .
           fi
           # 依存に含まれていなければ明示（tech.md の検証ゲート/テスト基盤）
-          pip install black flake8 mypy pytest pytest-cov pytest-asyncio pytest-mock httpx
+          # testcontainers: inspection_engine / migration テストが使い捨て Postgres を起動する
+          # （ubuntu-latest はホストに Docker があり docker-in-docker 不要）。
+          pip install black flake8 mypy pytest pytest-cov pytest-asyncio pytest-mock httpx testcontainers
 
       # 以降の検査は対象ディレクトリ（src / tests）が生えてから有効化する。
       - name: Format check (black, 行長100)

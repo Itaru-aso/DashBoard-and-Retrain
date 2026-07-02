@@ -39,6 +39,10 @@ def test_loads_values_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DEBUG", "true")
     monkeypatch.setenv("LOG_LEVEL", "DEBUG")
     monkeypatch.setenv("AGG_WINDOW_DAYS", "14")
+    # 既定値を検証する項目は env をクリアする（CI ジョブ env の ENVIRONMENT=test 等が漏れ込むのを防ぐ）
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.delenv("ENABLE_BASIC_AUTH", raising=False)
+    monkeypatch.delenv("BREACH_EVAL_WINDOW_DAYS", raising=False)
 
     s = Settings(_env_file=None)
 
