@@ -36,7 +36,7 @@
   - テスト（unit）: 各バリデーションの正常／異常。
   - Refs: R1.3–R1.5, R6 ／ commit: `feat(threshold): add threshold pydantic schemas`
 
-- [ ] **4. Repository: CRUD + `find_active`**
+- [x] **4. Repository: CRUD + `find_active`**
   - `src/repositories/threshold_repository.py`: `create` / `get` / `list`(filter) / `update` /
     `find_active(metric, scope, color, at)`（有効判定は半開区間 `valid_from <= at < valid_to`、`valid_to` NULL は無期限）。
   - テスト（integration）: CRUD 各種、`find_active` の境界（`valid_from==at` 有効・`valid_to==at` 無効）、
