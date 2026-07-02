@@ -58,7 +58,7 @@
   - テスト（api / TestClient）: ステータス（201/200/409/422）、`effective` の解決結果、Basic 認証ゲート通過。
   - Refs: R1, R2, R4, R5, R6 ／ commit: `feat(threshold): add threshold API endpoints`
 
-- [ ] **7. フロント: 閾値管理画面**（backend 先行なら後回し可）
+- [x] **7. フロント: 閾値管理画面**（backend 先行なら後回し可）
   - `frontend/src/api/thresholdApi.ts`、TanStack Query フック（`frontend/src/hooks/`）、
     `frontend/src/pages/ThresholdManagement.tsx`（一覧・登録・無効化）。ルーティング登録。
   - テスト（Vitest + Testing Library）: 一覧表示・登録フォームの送信・バリデーション表示。
