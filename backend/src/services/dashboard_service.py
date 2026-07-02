@@ -32,6 +32,16 @@ class TrendPoint:
 
 
 @dataclass(frozen=True)
+class Summary:
+    """期間集計のメトリクス。"""
+
+    throughput: int
+    ng_rate: float
+    false_alarm_rate: float | None
+    miss_rate: float | None
+
+
+@dataclass(frozen=True)
 class OverlayPoint:
     """日次の有効閾値系列点。"""
 
@@ -92,6 +102,47 @@ class DashboardService:
                 )
             )
         return points
+
+    def get_summary(
+        self,
+        date_from: date,
+        date_to: date,
+        color_no: str | None = None,
+        size: str | None = None,
+        chain: str | None = None,
+        tape: str | None = None,
+        unit_ids: list[str] | None = None,
+    ) -> Summary | None:
+        """期間・フィルタで件数を合算し率を算出する（monochro=0 は None）。"""
+        rows = self._daily_repo.read(date_from, date_to, color_no, size, chain, tape, unit_ids)
+        monochro = ng = fp = miss = annotated = 0
+        for row in rows:
+            monochro += row.monochro_count
+            ng += row.ng_count
+            fp += row.fp_num
+            miss += row.miss_num
+            annotated += row.annotated_count
+        rates = compute_rates(
+            MetricCounts(
+                monochro_count=monochro,
+                ng_count=ng,
+                fp_num=fp,
+                miss_num=miss,
+                annotated_count=annotated,
+            )
+        )
+        if rates is None:
+            return None
+        return Summary(
+            throughput=rates.throughput,
+            ng_rate=rates.ng_rate,
+            false_alarm_rate=rates.false_alarm_rate,
+            miss_rate=rates.miss_rate,
+        )
+
+    def get_machines(self) -> list[str]:
+        """号機一覧（daily_metrics.unit）を返す。"""
+        return self._daily_repo.list_units()
 
     def get_threshold_overlay(
         self,

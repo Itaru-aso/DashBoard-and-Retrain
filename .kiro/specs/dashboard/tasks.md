@@ -53,7 +53,7 @@
   - テスト（unit）: バリデーションの正常／異常。
   - Refs: R1, R6 ／ commit: `feat(dashboard): add dashboard schemas`
 
-- [ ] **5. API: エンドポイント + ルーター登録**
+- [x] **5. API: エンドポイント + ルーター登録**
   - `src/api/dashboard_endpoint.py`（`main.py` 登録）:
     `GET /api/dashboard/trends`（`machine_ids?` 含む）・`/summary`・`/records`（キーセット）・`/threshold-overlay`・`/machines`（号機一覧）。
     検査結果参照は `get_inspection_db`、閾値解決は `ThresholdService`。Basic 認証ゲート。

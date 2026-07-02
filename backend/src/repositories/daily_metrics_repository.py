@@ -114,6 +114,11 @@ class DailyMetricsRepository:
         stmt = stmt.order_by(DailyMetrics.jst_date, DailyMetrics.unit)
         return list(self._session.scalars(stmt))
 
+    def list_units(self) -> list[str]:
+        """daily_metrics に現れる号機（unit）の一覧を返す（昇順・重複なし）。"""
+        stmt = select(DailyMetrics.unit).distinct().order_by(DailyMetrics.unit)
+        return list(self._session.scalars(stmt))
+
     def read_unit_aggregated(
         self,
         date_from: date,
