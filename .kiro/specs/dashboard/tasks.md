@@ -39,7 +39,7 @@
     キーセット境界・next_cursor・安定順序、（tape あり時）フルタプル粒度。
   - Refs: R1, R2, R4, R7 ／ commit: `feat(dashboard): add inspection result aggregation & detail queries`
 
-- [ ] **3. 率算出（共有 `services/metrics.py`）・NULL 判定・重ね描き突合**
+- [x] **3. 率算出（共有 `services/metrics.py`）・NULL 判定・重ね描き突合**
   - `src/services/metrics.py`（**共有**：`保守タスク`／`色ライフサイクル` と共通）: 件数→率算出
     （`NG率`・`スループット`、KPI は `label_count==0 → NULL`・monochro 分母・monochro=0 除外）。
   - `src/services/dashboard_service.py`: `metrics.py` で率算出し、重ね描きは範囲内の各日について
