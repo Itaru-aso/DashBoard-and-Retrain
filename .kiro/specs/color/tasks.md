@@ -35,7 +35,7 @@
   - テスト（unit）: 検証（正常／異常）。
   - Refs: C-R5 ／ commit: `feat(color): add color schemas`
 
-- [ ] **4. Repository: 登録・upsert・状態更新・検索**
+- [x] **4. Repository: 登録・upsert・状態更新・検索**
   - `src/repositories/color_master_repository.py`（ver2 エンジン）: `create`(未実施)・`upsert_by_tuple`（色見本更新・status 保持）・
     `set_status`（前進のみ）・`list`(filter)・`find_by_status`。
   - テスト（integration）: 未実施作成／タプル upsert（色見本更新・status 保持）／ユニーク制約／status 前進／一覧フィルタ。
