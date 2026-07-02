@@ -20,7 +20,7 @@
 
 ## タスク (Tasks)
 
-- [ ] **1. マイグレーション: `task` テーブル + 部分ユニーク制約**（ver2 DB）
+- [x] **1. マイグレーション: `task` テーブル + 部分ユニーク制約**（ver2 DB）
   - `alembic/versions/<rev>_create_task.py`: カラム（フルタプル・`task_type`/`status` enum・
     `detected_value`/`threshold_value`/`evaluation_date`・`comments` JSONB・timestamps）、
     **部分ユニーク** `UNIQUE (color_no,size,chain,tape,task_type) WHERE status IN ('OPEN','IN_PROGRESS')`。
