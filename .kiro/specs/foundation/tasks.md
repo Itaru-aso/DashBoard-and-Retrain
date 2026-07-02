@@ -38,7 +38,7 @@
   - テスト（integration）: `alembic upgrade head` がテスト DB に通る（空ベースライン適用）。
   - Refs: F3 ／ commit: `feat(foundation): set up ver2 Alembic with empty baseline`
 
-- [ ] **5. テスト配線 `conftest.py`**（F9）
+- [x] **5. テスト配線 `conftest.py`**（F9）
   - ver2 テスト DB（migration 適用）＋**トランザクション ROLLBACK** fixture、業者検査 DB 相当（**dump スナップショット**）fixture、
     `TestClient` fixture、マーカー。
   - テスト（integration）: ROLLBACK 隔離が効く（テスト間でデータが残らない）。

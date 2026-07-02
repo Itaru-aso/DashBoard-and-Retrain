@@ -75,6 +75,9 @@ jobs:
       # config.py は INSPECTION_DATABASE_URL も必須（未設定だと import 時に fail-fast）。
       # テストは app_db を実接続しない（sqlite フェイク/スナップショット）ため、同じ使い捨て DB を指す。
       INSPECTION_DATABASE_URL: postgresql://testuser:testpass@localhost:5432/test_db
+      # conftest の ver2 テスト DB fixture が使う。設定時は testcontainers を起動せず
+      # この使い捨てサービス DB を使う（CI では docker-in-docker を避ける）。
+      TEST_DATABASE_URL: postgresql+psycopg2://testuser:testpass@localhost:5432/test_db
       # 認証はテストで override するため CI では無効化（有効だと BASIC_AUTH_PASS 必須）
       ENABLE_BASIC_AUTH: "false"
       ENVIRONMENT: test
