@@ -32,7 +32,7 @@
   - テスト（integration）: 保存→取得の round-trip、enum、JSONB の往復。
   - commit: `feat(task): add Task ORM model`
 
-- [ ] **3. Pydantic スキーマ**
+- [x] **3. Pydantic スキーマ**
   - `src/schemas/task.py`: 一覧フィルタ・タスク出力（コメント含む）・状態遷移リクエスト・コメント追加・evaluate。
   - テスト（unit）: enum・状態遷移入力・フィルタの検証（正常／異常）。
   - Refs: R3, R5 ／ commit: `feat(task): add task schemas`
