@@ -78,7 +78,7 @@
   - テスト（Vitest + Testing Library）: 一覧/フィルタ・取り込み UI・色見本編集・ステータス表示。
   - Refs: C-R5 ／ commit: `feat(color): add color master screen`
 
-- [ ] **10. 仕上げ: 検証ゲート確認**
+- [x] **10. 仕上げ: 検証ゲート確認**
   - 全テスト・`black`/`flake8`/`mypy`、front の `tsc`/`eslint`/`vitest` をグリーンに。カバレッジ 80% 以上。
   - commit: `chore(color): satisfy verification gate`
 
