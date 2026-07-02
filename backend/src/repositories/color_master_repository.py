@@ -129,6 +129,23 @@ class ColorMasterRepository:
         self._session.refresh(color)
         return color
 
+    def update_sample(self, color_id: int, values: dict[str, object]) -> ColorMaster | None:
+        """色見本（rgb_*/lab_*）のみを更新する（status は変更しない）。"""
+        color = self._session.get(ColorMaster, color_id)
+        if color is None:
+            return None
+        for key in ("rgb_r", "rgb_g", "rgb_b"):
+            if key in values:
+                setattr(color, key, values[key])
+        for key in ("lab_l", "lab_a", "lab_b"):
+            if key in values:
+                raw = values[key]
+                setattr(color, key, None if raw is None else Decimal(str(raw)))
+        color.updated_at = datetime.now(timezone.utc)
+        self._session.flush()
+        self._session.refresh(color)
+        return color
+
     def list(
         self,
         status: str | None = None,

@@ -17,6 +17,7 @@ dependencies = [
     "pydantic-settings",
     "APScheduler>=3,<4",
     "openpyxl",
+    "python-multipart",
 ]
 
 [tool.setuptools.packages.find]

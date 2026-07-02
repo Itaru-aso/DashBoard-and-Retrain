@@ -65,7 +65,7 @@
   - テスト（integration）: ジョブが評価サービスを呼ぶ／無効化／冪等。
   - Refs: C-R3, C-R4 ／ commit: `feat(color): add daily lifecycle scheduler job`
 
-- [ ] **8. API: エンドポイント + ルーター登録**
+- [x] **8. API: エンドポイント + ルーター登録**
   - `src/api/color_master_endpoint.py`（`main.py` 登録）: `GET /api/colors`（filter）・`GET /api/colors/{id}`・
     `POST /api/colors/import`・`PATCH /api/colors/{id}`（色見本のみ・**status 手動変更不可**）・
     `POST /api/colors/evaluate`（手動）。Basic 認証ゲート。
