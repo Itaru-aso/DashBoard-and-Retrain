@@ -48,7 +48,7 @@
   - テスト（integration）: 率算出／KPI=NULL／monochro=0 除外／重ね描きの日次解決・階段・欠損・フルタプル条件。
   - Refs: R2, R3, R5 ／ commit: `feat(dashboard): add shared metrics and dashboard service`
 
-- [ ] **4. Pydantic スキーマ**
+- [x] **4. Pydantic スキーマ**
   - `src/schemas/dashboard.py`: フィルタ（期間必須・色任意・**号機任意/複数**）／系列／明細の入出力。期間未指定・終了<開始 → 422。
   - テスト（unit）: バリデーションの正常／異常。
   - Refs: R1, R6 ／ commit: `feat(dashboard): add dashboard schemas`
