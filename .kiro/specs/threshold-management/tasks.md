@@ -43,7 +43,7 @@
     フルタプル一致のみヒット（`size` 違いは不一致）、結果は高々1件。
   - Refs: R1.1, R3.1–R3.5, R5 ／ commit: `feat(threshold): add threshold repository with active lookup`
 
-- [ ] **5. Service: 検証・解決・supersede**
+- [x] **5. Service: 検証・解決・supersede**
   - `src/services/threshold_service.py`:
     `resolve_effective`（色別→global→None）、`create`（検証→repo、排他制約違反 IntegrityError を Conflict 例外へ変換）、
     `update`、`supersede`（現行を close＋新規作成で履歴保持）、`disable`（`valid_to` 設定）。
