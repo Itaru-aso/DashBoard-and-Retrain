@@ -27,7 +27,7 @@
   - テスト（unit）: 必須欠如で例外／値の読み込み。
   - Refs: F1 ／ commit: `feat(foundation): add settings (pydantic-settings)`
 
-- [ ] **3. ロギング `logging_config.py`**（F8）
+- [x] **3. ロギング `logging_config.py`**（F8）
   - `LOG_LEVEL` 連動のプレーン形式ロガー初期化。
   - テスト（unit）: 初期化・レベル反映。
   - Refs: F8 ／ commit: `feat(foundation): add plain logging config`
