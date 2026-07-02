@@ -50,7 +50,7 @@
   - テスト（unit/integration）: 率算出・KPI NULL・monochro=0 除外。
   - Refs: R1（メトリクス）／ commit: `feat(metrics): extract shared metric computation`
 
-- [ ] **6. Service: 逸脱評価（閾値駆動・冪等）**
+- [x] **6. Service: 逸脱評価（閾値駆動・冪等）**
   - `src/services/breach_evaluation_service.py`: 対象期間に**有効な閾値の `(metric, フルタプル)` を取得**し、
     各 **JST 日**でメトリクス算出（`services/metrics.py`）→ `resolve_effective` と比較 →
     KPI NULL はスキップ＋WARN → `値 > 閾値` で `task_repository` に upsert。**冪等・自動クローズ無し**。
