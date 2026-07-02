@@ -49,7 +49,7 @@
     冪等再集計で後追いアノテーション反映、バックフィル。
   - Refs: A-R2, A-R3, A-R4 ／ commit: `feat(agg): add aggregation_service (aggregate, window, backfill)`
 
-- [ ] **6. スケジューラジョブ**
+- [x] **6. スケジューラジョブ**
   - `src/jobs/aggregation_job.py`: 日次（`AGG_RUN_TIME`・JST 早朝）に `aggregate_window` を実行・冪等。
     既存日次ジョブと**順序 集計 → 逸脱判定 → 昇格**で並べる（集計後に判定/昇格が読む）。
   - テスト（integration）: スケジュール起動で `aggregate_window` 呼び出し・順序。
