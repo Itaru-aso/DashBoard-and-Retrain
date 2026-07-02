@@ -61,7 +61,7 @@
   - テスト（api）: 認証なし→401／正しい資格→通過／無効化時は素通り。
   - Refs: F5 ／ commit: `feat(foundation): add basic auth gate (shared credential)`
 
-- [ ] **9. スケジューラ基盤 `scheduler.py`**（F6）
+- [x] **9. スケジューラ基盤 `scheduler.py`**（F6）
   - **APScheduler** を生成し、`main.py` の lifespan で起動/停止。`src/jobs/` のジョブ登録関数。`*_ENABLED` で無効化。
     `uvicorn --workers 1` 前提（単一所有）。
   - テスト（integration）: 起動/停止・ジョブ登録・無効化フラグ。
