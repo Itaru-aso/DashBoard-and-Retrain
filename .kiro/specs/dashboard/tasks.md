@@ -67,7 +67,7 @@
   - テスト（Vitest + Testing Library）: 系列描画・NULL 欠損・閾値ライン・表の仮想化・フィルタ送信。
   - Refs: R2, R3, R4 ／ commit: `feat(dashboard): add dashboard screen`
 
-- [ ] **7. 仕上げ: 検証ゲート確認**
+- [x] **7. 仕上げ: 検証ゲート確認**
   - 全テスト・`black`/`flake8`/`mypy`、front の `tsc --noEmit`/`eslint`/`vitest` をグリーンに。カバレッジ 80% 以上。
   - commit: `chore(dashboard): satisfy verification gate`
 
