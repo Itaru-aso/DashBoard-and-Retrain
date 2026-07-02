@@ -25,7 +25,7 @@
   - テスト（integration）: upgrade/downgrade、同一タプル重複 INSERT を制約が弾く。
   - Refs: C-R1.1 ／ commit: `feat(color): add color_master table migration`
 
-- [ ] **2. ORM モデル `ColorMaster`**
+- [x] **2. ORM モデル `ColorMaster`**
   - `src/models/color_master.py`（全カラム・status enum）。
   - テスト（integration）: round-trip・enum。
   - commit: `feat(color): add ColorMaster ORM model`
