@@ -34,7 +34,7 @@
   - テスト（unit）: 検証（必須・型）。
   - Refs: E-R1 ／ commit: `feat(edge): add edge_pc schemas`
 
-- [ ] **4. Repository: CRUD ＋ `find_enabled`**
+- [x] **4. Repository: CRUD ＋ `find_enabled`**
   - `src/repositories/edge_pc_repository.py`（ver2 エンジン）: create・update・delete・get・list・**`find_enabled()`**（配信先解決の参照点）。
   - テスト（integration）: CRUD・`name` ユニーク・`find_enabled()` が有効のみ返す。
   - Refs: E-R1, E-R3, E-R4 ／ commit: `feat(edge): add edge_pc repository (CRUD, find_enabled)`
