@@ -51,7 +51,7 @@
     無効化後は解決対象外、未有効化レコードの in-place 訂正、重複時に Conflict。
   - Refs: R2, R3, R4 ／ commit: `feat(threshold): add threshold service (resolve, supersede, validation)`
 
-- [ ] **6. API: エンドポイント + ルーター登録**
+- [x] **6. API: エンドポイント + ルーター登録**
   - `src/api/threshold_endpoint.py`（`get_db` 依存）を作り `main.py` に登録:
     `POST /api/thresholds`・`GET /api/thresholds`・`GET /api/thresholds/{id}`・`PATCH /api/thresholds/{id}`・
     `GET /api/thresholds/effective`（query: metric, color_no, size, chain, tape, at）。

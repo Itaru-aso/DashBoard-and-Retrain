@@ -38,6 +38,14 @@ class ThresholdService:
         self._session = session
         self._repo = ThresholdRepository(session)
 
+    def get(self, threshold_id: int) -> Threshold | None:
+        """id で取得する。"""
+        return self._repo.get(threshold_id)
+
+    def list(self, metric: str | None = None, scope: str | None = None) -> list[Threshold]:
+        """メトリクス・スコープで絞り込んで一覧する。"""
+        return self._repo.list(metric, scope)
+
     def resolve_effective(
         self, metric: str, color: Sequence[str], at: datetime
     ) -> Threshold | None:
