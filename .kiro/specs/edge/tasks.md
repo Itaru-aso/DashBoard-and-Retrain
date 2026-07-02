@@ -29,7 +29,7 @@
   - テスト（integration）: round-trip。
   - commit: `feat(edge): add EdgePc ORM model`
 
-- [ ] **3. Pydantic スキーマ**
+- [x] **3. Pydantic スキーマ**
   - `src/schemas/edge_pc.py`: 登録・更新・出力・一覧。
   - テスト（unit）: 検証（必須・型）。
   - Refs: E-R1 ／ commit: `feat(edge): add edge_pc schemas`
