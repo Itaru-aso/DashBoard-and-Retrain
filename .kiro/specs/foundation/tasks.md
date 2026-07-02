@@ -85,7 +85,7 @@
   - テスト: `docker compose` で起動し `/health` が応答（ver2 DB 疎通）。
   - Refs: F11 ／ commit: `chore(foundation): add Dockerfile and docker-compose (image/GPU TBD)`
 
-- [ ] **13. 仕上げ: 検証ゲート確認**
+- [x] **13. 仕上げ: 検証ゲート確認**
   - 全テスト・`black`/`flake8`/`mypy`、front の `tsc`/`eslint`/`vitest` をグリーンに。カバレッジ 80% 以上。
   - commit: `chore(foundation): satisfy verification gate`
 
