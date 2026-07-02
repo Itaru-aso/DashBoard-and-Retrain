@@ -18,7 +18,7 @@
 
 ## タスク (Tasks)
 
-- [ ] **1. マイグレーション: `edge_pc` テーブル**（ver2 DB）
+- [x] **1. マイグレーション: `edge_pc` テーブル**（ver2 DB）
   - `name`（**ユニーク**）・`host`・`port`・`username`・`password`（任意・平文）・`remote_path`・`enabled`（既定 true）＋timestamps。
   - **列は ver1 設定受領後に確定**（追加項目があれば追補）。
   - テスト（integration）: upgrade/downgrade、`name` ユニークを制約が弾く。
