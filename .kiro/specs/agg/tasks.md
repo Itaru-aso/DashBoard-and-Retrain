@@ -60,7 +60,7 @@
   - テスト（api / TestClient）: 単日・期間・認証。
   - Refs: A-R2, A-R4 ／ commit: `feat(agg): add aggregation run endpoint`
 
-- [ ] **8. 仕上げ: 検証ゲート確認**
+- [x] **8. 仕上げ: 検証ゲート確認**
   - 全テスト・`black`/`flake8`/`mypy` をグリーンに。カバレッジ 80% 以上。
   - commit: `chore(agg): satisfy verification gate`
 
