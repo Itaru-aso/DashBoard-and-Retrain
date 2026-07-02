@@ -60,7 +60,7 @@
   - テスト（api / TestClient）: ステータス・系列形状・NULL 表現・**号機フィルタ**・認証ゲート・業者 DB 接続断時の挙動。
   - Refs: R1–R7 ／ commit: `feat(dashboard): add dashboard API endpoints`
 
-- [ ] **6. フロント: ダッシュボード画面**
+- [x] **6. フロント: ダッシュボード画面**
   - `frontend/src/api/dashboardApi.ts`、TanStack Query フック（`frontend/src/hooks/`）、
     `frontend/src/pages/Dashboard.tsx`：フィルタ（期間・色・**号機〔複数選択・既定 全号機〕**）、推移グラフ（**recharts**・閾値ライン重ね描き）、集計表、
     明細一覧（**react-window** 仮想化）。KPI が NULL の点は欠損として描画（線をつながない）。
