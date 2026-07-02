@@ -64,7 +64,7 @@
   - テスト（integration）: ジョブが評価サービスを呼ぶ／無効化フラグ／多重実行でも冪等。
   - Refs: R1.4 ／ commit: `feat(task): add daily breach-eval scheduler job`
 
-- [ ] **8. API: エンドポイント + ルーター登録**
+- [x] **8. API: エンドポイント + ルーター登録**
   - `src/api/task_endpoint.py`（`main.py` 登録）: `GET /api/tasks`（filter）・`GET /api/tasks/{id}`・
     `PATCH /api/tasks/{id}/status`（前進のみ・違反 409）・`POST /api/tasks/{id}/comments`・
     `POST /api/tasks/evaluate`（手動）。**手動作成は無し**。Basic 認証ゲート。
