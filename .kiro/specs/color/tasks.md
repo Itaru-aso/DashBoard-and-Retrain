@@ -41,7 +41,7 @@
   - テスト（integration）: 未実施作成／タプル upsert（色見本更新・status 保持）／ユニーク制約／status 前進／一覧フィルタ。
   - Refs: C-R1, C-R2, C-R5 ／ commit: `feat(color): add color_master repository`
 
-- [ ] **5. 取り込みサービス `color_import_service`**
+- [x] **5. 取り込みサービス `color_import_service`**
   - 一覧ファイル（xlsx・`Sheet1`）をパース → タプル＋色見本を抽出 → `upsert_by_tuple`（新規は未実施）。バリデーション・結果レポート。
   - **列マッピング（確定）**: `size`→size・`chain`→chain・`tape`→tape（空欄可）・`color_no`→color_no・`R/G/B`→rgb・`L/a/b`→lab。
     - `color_no`・`size` は**文字列**として保持（ゼロ埋め維持。例 `001`/`03`。数値化しない）。

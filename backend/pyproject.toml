@@ -16,6 +16,7 @@ dependencies = [
     "psycopg2-binary",
     "pydantic-settings",
     "APScheduler>=3,<4",
+    "openpyxl",
 ]
 
 [tool.setuptools.packages.find]
