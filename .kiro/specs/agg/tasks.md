@@ -35,7 +35,7 @@
   - テスト（unit）: 率・NULL（annotated=0）・monochro=0 除外。
   - Refs: A-R5 ／ commit: `feat(agg): add shared metrics computation`
 
-- [ ] **4. Repository: upsert（delete→insert）・読み出し・号機合算**
+- [x] **4. Repository: upsert（delete→insert）・読み出し・号機合算**
   - `src/repositories/daily_metrics_repository.py`（ver2）: `upsert_day(jst_date, rows)`（**対象日を delete→insert・同一トランザクション**・冪等）、
     `read(from,to,tuple?,unit_ids?)`、`read_unit_aggregated(from,to,tuple)`（号機合算）。
   - テスト（integration）: 冪等（同日2回で重複なし・消えたタプルが残らない）、期間/タプル/号機フィルタ、号機合算。
