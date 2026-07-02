@@ -39,7 +39,7 @@
   - テスト（integration）: CRUD・`name` ユニーク・`find_enabled()` が有効のみ返す。
   - Refs: E-R1, E-R3, E-R4 ／ commit: `feat(edge): add edge_pc repository (CRUD, find_enabled)`
 
-- [ ] **5. Service: CRUD ＋ 接続テスト（任意）**
+- [x] **5. Service: CRUD ＋ 接続テスト（任意）**
   - `src/services/edge_pc_service.py`: 登録・更新・削除・一覧、`test_connection(id)`（`ftplib` で接続可否）。
   - テスト（integration・**ftplib モック**）: CRUD、接続テスト成功/失敗の判定。
   - Refs: E-R1, E-R5 ／ commit: `feat(edge): add edge_pc service (CRUD, connection test)`
