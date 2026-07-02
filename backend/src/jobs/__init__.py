@@ -14,6 +14,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from src import config
 from src.jobs.aggregation_job import run_aggregation
+from src.jobs.breach_eval_job import run_breach_eval
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +23,6 @@ def _parse_hhmm(value: str) -> tuple[int, int]:
     """ "HH:MM" を (hour, minute) に解釈する。"""
     hour, minute = value.split(":")
     return int(hour), int(minute)
-
-
-def _breach_eval_job() -> None:
-    """逸脱判定ジョブ（本体は閾値管理 spec が実装）。現時点は雛形。"""
-    logger.info("逸脱判定ジョブは未実装です（各機能 spec で本体を追加する）")
 
 
 def register_jobs(scheduler: BaseScheduler) -> None:
@@ -51,7 +47,7 @@ def register_jobs(scheduler: BaseScheduler) -> None:
     if config.settings.BREACH_EVAL_ENABLED:
         hour, minute = _parse_hhmm(config.settings.BREACH_EVAL_TIME)
         scheduler.add_job(
-            _breach_eval_job,
+            run_breach_eval,
             CronTrigger(hour=hour, minute=minute),
             id="breach_eval",
             replace_existing=True,

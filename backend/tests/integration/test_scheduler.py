@@ -39,7 +39,7 @@ def test_job_registered_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     try:
         job = scheduler.get_job("breach_eval")
         assert job is not None
-        job.func()  # 雛形ジョブが例外なく呼べる
+        # ジョブ本体（run_breach_eval）は task spec の breach_eval_job テストで検証する。
     finally:
         scheduler.shutdown(wait=False)
 

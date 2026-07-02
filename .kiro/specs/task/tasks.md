@@ -58,7 +58,7 @@
     再実行で重複しない（冪等）／閾値内に戻っても自動クローズしない。
   - Refs: R1, R2 ／ commit: `feat(task): add breach evaluation service (threshold-driven, idempotent)`
 
-- [ ] **7. スケジューラ: 日次ジョブ**
+- [x] **7. スケジューラ: 日次ジョブ**
   - `src/jobs/breach_eval_job.py`（`breach_evaluation_service.evaluate(BREACH_EVAL_WINDOW_DAYS)` を呼ぶ薄い層）、
     `main.py` 起動時にアプリ内スケジューラへ日次登録（`BREACH_EVAL_TIME`／`BREACH_EVAL_ENABLED`）。単一ワーカ所有。
   - テスト（integration）: ジョブが評価サービスを呼ぶ／無効化フラグ／多重実行でも冪等。
