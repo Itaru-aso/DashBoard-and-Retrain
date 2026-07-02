@@ -19,7 +19,7 @@
 
 ## タスク (Tasks)
 
-- [ ] **1. マイグレーション: `color_master` テーブル**（ver2 DB）
+- [x] **1. マイグレーション: `color_master` テーブル**（ver2 DB）
   - 同一性タプル＋`rgb`(R/G/B)＋`lab`(L/a/b)＋`status` enum（既定 `未実施`）＋`verification_at`/`production_at`＋timestamps。
     **ユニーク制約** `UNIQUE (color_no,size,chain,tape)`。
   - テスト（integration）: upgrade/downgrade、同一タプル重複 INSERT を制約が弾く。
