@@ -30,7 +30,7 @@
   - テスト（integration）: round-trip・enum。
   - commit: `feat(color): add ColorMaster ORM model`
 
-- [ ] **3. Pydantic スキーマ**
+- [x] **3. Pydantic スキーマ**
   - `src/schemas/color_master.py`: 出力・一覧フィルタ・取り込み結果・色見本更新。
   - テスト（unit）: 検証（正常／異常）。
   - Refs: C-R5 ／ commit: `feat(color): add color schemas`
