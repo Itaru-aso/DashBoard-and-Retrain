@@ -41,7 +41,7 @@
   - テスト（integration）: 冪等（同日2回で重複なし・消えたタプルが残らない）、期間/タプル/号機フィルタ、号機合算。
   - Refs: A-R1, A-R6 ／ commit: `feat(agg): add daily_metrics repository (idempotent upsert, reads)`
 
-- [ ] **5. Service: 集計・再集計・バックフィル**
+- [x] **5. Service: 集計・再集計・バックフィル**
   - `src/services/aggregation_service.py`: `aggregate_day(jst_date)`（`get_inspection_db` で app_db 当日パーティションを
     CTE 集計〔正解は image_id 単位に `MAX(on_class)`・use_flg 無視〕→ 件数を取得 → `upsert_day` で ver2 へ）、
     `aggregate_window(AGG_WINDOW_DAYS)`、`backfill(from,to)`。**2エンジン・越境結合なし**。

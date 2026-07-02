@@ -7,14 +7,15 @@
     - `ver2_engine`: 上記 URL の SQLAlchemy Engine（session スコープ）。
     - `db_session`: 各テストを接続＋トランザクションで囲み、終了時に ROLLBACK して
       隔離する Session（migration を正・テスト間でデータが残らない）。
+    - `inspection_engine` / `inspection_session`: 業者検査 DB（app_db）代役。使い捨ての
+      Postgres コンテナに schema-spec-mapping 準拠の最小スキーマ（admin/annotation）を
+      作成した合成代役（実 dump 入手後に差し替え可能）。inspection_session は ROLLBACK 隔離。
 
 マーカー（unit / integration / api）は `pyproject.toml` に登録済み。
 
 TODO（依存タスク完了後に追加）:
     - `client`（TestClient）fixture: FastAPI app（F7・task10）と `get_db`（F2・task6）
       の完成後に、DB 依存をテスト DB へ差し替えて提供する。
-    - 業者検査 DB 相当（dump 由来スナップショット）fixture: 業者外部モデル（F4・task7）
-      と実 dump 入手後に追加する（ライブ DB は再現不可のため固定スナップショットを使う）。
 """
 
 from __future__ import annotations
@@ -102,6 +103,68 @@ def ver2_engine(ver2_db_url: str) -> Iterator[Engine]:
 def db_session(ver2_engine: Engine) -> Iterator[Session]:
     """各テストを接続＋トランザクションで囲み、終了時に ROLLBACK して隔離する。"""
     connection = ver2_engine.connect()
+    transaction = connection.begin()
+    session = Session(bind=connection, join_transaction_mode="create_savepoint")
+    try:
+        yield session
+    finally:
+        session.close()
+        transaction.rollback()
+        connection.close()
+
+
+# 業者検査 DB（app_db）代役の最小スキーマ（schema-spec-mapping.md 準拠。集計に必要な列のみ）。
+_INSPECTION_SCHEMA_DDL = (
+    "CREATE SCHEMA IF NOT EXISTS admin",
+    "CREATE SCHEMA IF NOT EXISTS annotation",
+    (
+        "CREATE TABLE annotation.image_base ("
+        " image_id bigint PRIMARY KEY,"
+        " inspect_timestamp timestamp NOT NULL,"
+        " unit text,"
+        " camera_model text,"
+        " judgment_result integer,"
+        " extra_info jsonb)"
+    ),
+    (
+        "CREATE TABLE annotation.annotation_item ("
+        " id bigserial PRIMARY KEY,"
+        " image_id bigint NOT NULL,"
+        " dataset_id integer NOT NULL,"
+        " item_id integer NOT NULL,"
+        " use_flg boolean)"
+    ),
+    (
+        "CREATE TABLE admin.dataset_category_item ("
+        " dataset_id integer NOT NULL,"
+        " item_id integer NOT NULL,"
+        " on_class text,"
+        " PRIMARY KEY (dataset_id, item_id))"
+    ),
+)
+
+
+@pytest.fixture(scope="session")
+def inspection_engine() -> Iterator[Engine]:
+    """業者検査 DB（app_db）代役の Engine（合成スキーマ作成済み・使い捨てコンテナ）。"""
+    from sqlalchemy import text
+    from testcontainers.postgres import PostgresContainer
+
+    with PostgresContainer("postgres:14") as postgres:
+        engine = create_engine(postgres.get_connection_url())
+        with engine.begin() as conn:
+            for ddl in _INSPECTION_SCHEMA_DDL:
+                conn.execute(text(ddl))
+        try:
+            yield engine
+        finally:
+            engine.dispose()
+
+
+@pytest.fixture
+def inspection_session(inspection_engine: Engine) -> Iterator[Session]:
+    """app_db 代役の Session（ROLLBACK 隔離。seed と読み取りを同一トランザクションで行う）。"""
+    connection = inspection_engine.connect()
     transaction = connection.begin()
     session = Session(bind=connection, join_transaction_mode="create_savepoint")
     try:
