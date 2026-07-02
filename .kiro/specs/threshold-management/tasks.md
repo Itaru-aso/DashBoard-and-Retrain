@@ -64,7 +64,7 @@
   - テスト（Vitest + Testing Library）: 一覧表示・登録フォームの送信・バリデーション表示。
   - Refs: R1, R2, R5 ／ commit: `feat(threshold): add threshold management screen`
 
-- [ ] **8. 仕上げ: 検証ゲート確認**
+- [x] **8. 仕上げ: 検証ゲート確認**
   - 全テスト・`black`/`flake8`/`mypy`、front の `tsc --noEmit`/`eslint`/`vitest` をグリーンに。
     カバレッジ 80% 以上を確認。
   - commit: `chore(threshold): satisfy verification gate`
