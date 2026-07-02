@@ -108,7 +108,10 @@ def create_app() -> FastAPI:
     # /health は認証除外（アクセスゲートは各機能ルータに require_auth を適用する）。
     app.add_api_route("/health", health, methods=["GET"], tags=["health"])
 
-    # 各機能ルータはここで app.include_router(...) する（本基盤時点では無し）。
+    # 各機能ルータの登録。
+    from src.api.aggregation_endpoint import router as aggregation_router
+
+    app.include_router(aggregation_router)
 
     # SPA 配信は最後にマウント（API ルートを優先させる）。
     _mount_frontend(app)

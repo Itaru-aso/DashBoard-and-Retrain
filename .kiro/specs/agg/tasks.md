@@ -55,7 +55,7 @@
   - テスト（integration）: スケジュール起動で `aggregate_window` 呼び出し・順序。
   - Refs: A-R2, A-R3 ／ commit: `feat(agg): add daily aggregation scheduler job`
 
-- [ ] **7. API: 集計トリガー**
+- [x] **7. API: 集計トリガー**
   - `src/api/aggregation_endpoint.py`（`main.py` 登録）: `POST /api/aggregation/run`（`date` 単日／`from,to` 期間）。Basic 認証。
   - テスト（api / TestClient）: 単日・期間・認証。
   - Refs: A-R2, A-R4 ／ commit: `feat(agg): add aggregation run endpoint`
