@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router-dom";
 
+import ColorMaster from "@/pages/ColorMaster";
 import Dashboard from "@/pages/Dashboard";
 import TaskList from "@/pages/TaskList";
 import ThresholdManagement from "@/pages/ThresholdManagement";
@@ -14,6 +15,7 @@ export default function App() {
       <Route path="/" element={<Home />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/tasks" element={<TaskList />} />
+      <Route path="/colors" element={<ColorMaster />} />
       <Route path="/thresholds" element={<ThresholdManagement />} />
     </Routes>
   );

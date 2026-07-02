@@ -72,7 +72,7 @@
   - テスト（api / TestClient）: 一覧・取り込み・evaluate・色見本更新・status 手動変更不可・認証。
   - Refs: C-R1, C-R5, C-R6 ／ commit: `feat(color): add color API endpoints`
 
-- [ ] **9. フロント: 色マスター画面**
+- [x] **9. フロント: 色マスター画面**
   - `frontend/src/api/colorApi.ts`、TanStack Query フック、`frontend/src/pages/ColorMaster.tsx`
     （一覧・ステータス絞り込み・ファイル取り込み・色見本の表示/編集・ステータス表示）。
   - テスト（Vitest + Testing Library）: 一覧/フィルタ・取り込み UI・色見本編集・ステータス表示。
