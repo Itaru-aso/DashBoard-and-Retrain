@@ -56,7 +56,7 @@
   - テスト（Vitest + Testing Library）: 一覧・登録/編集/削除・接続テスト。
   - Refs: E-R1, E-R4, E-R5 ／ commit: `feat(edge): add edge_pc management screen`
 
-- [ ] **8. 仕上げ: 検証ゲート確認**
+- [x] **8. 仕上げ: 検証ゲート確認**
   - 全テスト・`black`/`flake8`/`mypy`、front の `tsc`/`eslint`/`vitest` をグリーンに。カバレッジ 80% 以上。
   - commit: `chore(edge): satisfy verification gate`
 
