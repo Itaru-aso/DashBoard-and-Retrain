@@ -72,7 +72,7 @@
     起動コマンド・cwd・start_new_session／FIFO・同時1本／QUEUED キャンセルは起動されず CANCELLED／進捗素通し。
   - Refs: M-R2, M-R3, M-R4, M-R5, M-R6, M-R7 ／ commit: `feat(retraining): add training_service (queue, subprocess, cancel)`
 
-- [~] **6. Service: `deployment_service`（配信・現行モデル・学習と分離）**
+- [x] **6. Service: `deployment_service`（配信・現行モデル・学習と分離）**
   - `deploy_job(job_id)`: COMPLETED の ONNX を有効エッジPC全台へ **ver2 自前 ftplib** で送信（`model_port`・
     リモート名は検査PC互換の **`{color_no}_{mode}_model.onnx`** を FTP ルート直下）→ `deployed_model` をフルタプルで upsert。
     集約: 全台成功=SUCCESS／一部失敗=PARTIAL／全失敗=FAILED（再配信可・ジョブ成功は覆さない）。
