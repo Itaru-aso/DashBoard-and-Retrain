@@ -55,7 +55,7 @@
   - テスト（unit）: 検証（正常／異常）。
   - Refs: M-R1 ／ commit: `feat(retraining): add schemas`
 
-- [~] **4. Repository**
+- [x] **4. Repository**
   - `src/repositories/retraining_repository.py`（ver2）: ジョブ作成（QUEUED）・状態更新（running/completed/failed/cancelled）・
     履歴一覧（filter/paging）・`list_active`（復旧用）・`deployed_model` upsert（フルタプル）・現行取得。
   - テスト（integration）: 作成・状態遷移の永続・一覧/絞り込み/ページング・list_active 順序・deployed upsert（上書き・ユニーク）・取得。
