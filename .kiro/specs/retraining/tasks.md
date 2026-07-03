@@ -44,7 +44,7 @@
   - テスト（integration）: upgrade/downgrade、`deployed_model` のフルタプル ユニークを制約が弾く。
   - Refs: M-R7, M-R8.3 ／ commit: `feat(retraining): add retraining_job and deployed_model migration`
 
-- [~] **2. ORM モデル**
+- [x] **2. ORM モデル**
   - `src/models/retraining_job.py`（`RetrainingJob`・`JobStatus`・`TERMINAL_STATUSES`）、
     `src/models/deployed_model.py`（`DeployedModel`・`DeployStatus`）。
   - テスト（integration）: round-trip・status CHECK・FK・`is_terminal`。
