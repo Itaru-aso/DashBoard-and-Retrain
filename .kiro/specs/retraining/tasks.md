@@ -50,7 +50,7 @@
   - テスト（integration）: round-trip・status CHECK・FK・`is_terminal`。
   - commit: `feat(retraining): add ORM models`
 
-- [~] **3. Pydantic スキーマ**
+- [x] **3. Pydantic スキーマ**
   - `src/schemas/retraining.py`: 起票（フルタプル＋created_by）・一覧/詳細・キャンセル・現行配信・配信結果。
   - テスト（unit）: 検証（正常／異常）。
   - Refs: M-R1 ／ commit: `feat(retraining): add schemas`
