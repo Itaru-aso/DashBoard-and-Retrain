@@ -61,7 +61,7 @@
   - テスト（integration）: 作成・状態遷移の永続・一覧/絞り込み/ページング・list_active 順序・deployed upsert（上書き・ユニーク）・取得。
   - Refs: M-R7, M-R8.3 ／ commit: `feat(retraining): add retraining repository`
 
-- [~] **5. Service: `training_service`（キュー・実行・キャンセル）**
+- [x] **5. Service: `training_service`（キュー・実行・キャンセル）**
   - シングルトン。`main.py` lifespan で **asyncio キュー＋単一ワーカ**起動・**FIFO・同時1本**。復旧（消えた RUNNING→FAILED・QUEUED 再投入）。
   - 実行: `python pipline.py common.target_color=<color_no> common.pipeline_mode=train
     common.skip_download=true common.skip_upload=true color.mlflow.enabled=false monochro.mlflow.enabled=false`
