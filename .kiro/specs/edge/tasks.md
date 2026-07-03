@@ -50,7 +50,7 @@
   - テスト（api / TestClient）: CRUD のステータス・`name` 重複（409）・接続テスト・認証。
   - Refs: E-R1, E-R4, E-R5, E-R6 ／ commit: `feat(edge): add edge_pc API endpoints`
 
-- [ ] **7. フロント: エッジPC管理画面**
+- [x] **7. フロント: エッジPC管理画面**
   - `frontend/src/api/edgePcApi.ts`、TanStack Query フック、`frontend/src/pages/EdgePc.tsx`
     （一覧・登録/編集/削除・有効フラグ・接続テストボタン）。
   - テスト（Vitest + Testing Library）: 一覧・登録/編集/削除・接続テスト。
