@@ -23,8 +23,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """color_master を作成する（タプルユニーク・status CHECK）。"""
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE color_master (
             id bigserial PRIMARY KEY,
             color_no text NOT NULL,
@@ -46,8 +45,7 @@ def upgrade() -> None:
                 CHECK (status IN ('未実施', '量産検証', '実生産')),
             CONSTRAINT uq_color_master_tuple UNIQUE (color_no, size, chain, tape)
         )
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

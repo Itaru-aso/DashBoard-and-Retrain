@@ -26,8 +26,7 @@ def upgrade() -> None:
     """threshold を作成する（CHECK・部分排他制約・解決用索引つき）。"""
     op.execute("CREATE EXTENSION IF NOT EXISTS btree_gist")
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE threshold (
             id bigserial PRIMARY KEY,
             metric text NOT NULL,
@@ -55,29 +54,24 @@ def upgrade() -> None:
                     AND chain IS NULL AND tape IS NULL)
             )
         )
-        """
-    )
+        """)
 
     # per_color 用の部分排他制約（フルタプル一致かつ期間が重なる行を禁止）
-    op.execute(
-        """
+    op.execute("""
         ALTER TABLE threshold ADD CONSTRAINT ex_threshold_per_color
         EXCLUDE USING gist (
             metric WITH =, color_no WITH =, size WITH =, chain WITH =, tape WITH =,
             tstzrange(valid_from, valid_to) WITH &&
         ) WHERE (scope = 'per_color')
-        """
-    )
+        """)
 
     # global 用の部分排他制約（色カラムが NULL のため per_color とは別制約が必須）
-    op.execute(
-        """
+    op.execute("""
         ALTER TABLE threshold ADD CONSTRAINT ex_threshold_global
         EXCLUDE USING gist (
             metric WITH =, tstzrange(valid_from, valid_to) WITH &&
         ) WHERE (scope = 'global')
-        """
-    )
+        """)
 
     op.execute(
         "CREATE INDEX ix_threshold_resolve "

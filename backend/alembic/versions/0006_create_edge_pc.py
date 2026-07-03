@@ -23,8 +23,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """edge_pc を作成する（name ユニーク）。"""
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE edge_pc (
             id bigserial PRIMARY KEY,
             name text NOT NULL,
@@ -39,8 +38,7 @@ def upgrade() -> None:
             updated_at timestamptz NOT NULL DEFAULT now(),
             CONSTRAINT uq_edge_pc_name UNIQUE (name)
         )
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

@@ -23,8 +23,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """task を作成する（enum CHECK・comments JSONB・部分ユニーク）。"""
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE task (
             id bigserial PRIMARY KEY,
             color_no text NOT NULL,
@@ -44,16 +43,13 @@ def upgrade() -> None:
             CONSTRAINT ck_task_status
                 CHECK (status IN ('OPEN', 'IN_PROGRESS', 'DONE'))
         )
-        """
-    )
+        """)
     # 同キーにアクティブなタスクは高々1件（多重発火・同時実行でも DB で担保）。
-    op.execute(
-        """
+    op.execute("""
         CREATE UNIQUE INDEX uq_task_active
         ON task (color_no, size, chain, tape, task_type)
         WHERE status IN ('OPEN', 'IN_PROGRESS')
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

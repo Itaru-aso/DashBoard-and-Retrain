@@ -25,9 +25,7 @@ if config.config_file_name is not None:
 # 接続先は ver2 DB（DATABASE_URL）。秘密情報は ini に書かず env から取得する。
 database_url = os.environ.get("DATABASE_URL")
 if not database_url:
-    raise RuntimeError(
-        "DATABASE_URL が未設定です（Alembic は ver2 DB のみを対象とします）"
-    )
+    raise RuntimeError("DATABASE_URL が未設定です（Alembic は ver2 DB のみを対象とします）")
 config.set_main_option("sqlalchemy.url", database_url)
 
 # ver2 のみを管理対象にする（ExternalBase は含めない）。
