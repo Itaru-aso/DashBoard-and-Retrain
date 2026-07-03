@@ -44,7 +44,7 @@
   - テスト（integration・**ftplib モック**）: CRUD、接続テスト成功/失敗の判定。
   - Refs: E-R1, E-R5 ／ commit: `feat(edge): add edge_pc service (CRUD, connection test)`
 
-- [ ] **6. API: エンドポイント + ルーター登録**
+- [x] **6. API: エンドポイント + ルーター登録**
   - `src/api/edge_pc_endpoint.py`（`main.py` 登録）: `GET /api/edge-pcs`・`GET /{id}`・`POST`・`PATCH /{id}`・
     `DELETE /{id}`・`POST /{id}/test`。Basic 認証ゲート。
   - テスト（api / TestClient）: CRUD のステータス・`name` 重複（409）・接続テスト・認証。
