@@ -38,7 +38,7 @@
   - テスト（学習リポジトリ側・任意）: skip_download/skip_upload で DL/配信が呼ばれないこと（FTP モック）。
   - commit: `feat(training): add skip_download/skip_upload flags (no logic change)`
 
-- [~] **1. マイグレーション: `retraining_job` ＋ `deployed_model`**（ver2 DB）
+- [x] **1. マイグレーション: `retraining_job` ＋ `deployed_model`**（ver2 DB）
   - `retraining_job`（フルタプル・`status`〔CHECK 制約〕・各時刻・error・ONNX パス・created_by・索引）、
     `deployed_model`（**フルタプル ユニーク**・`job_id` FK・ONNX パス・`deploy_status`・`deploy_detail`・`deployed_at`）。
   - テスト（integration）: upgrade/downgrade、`deployed_model` のフルタプル ユニークを制約が弾く。
