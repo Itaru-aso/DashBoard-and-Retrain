@@ -94,7 +94,7 @@
     現行配信・手動配信・認証。
   - Refs: M-R1, M-R5, M-R7, M-R8, M-R9 ／ commit: `feat(retraining): add retraining API endpoints`
 
-- [~] **9. フロント: 再学習画面**
+- [x] **9. フロント: 再学習画面**
   - `frontend/src/api/retrainingApi.ts`、WS フック、TanStack Query フック、`frontend/src/pages/Retraining.tsx`
     （履歴一覧・色を選んで起票・**WS ライブ進捗（素通しログ）**・キャンセル・現行配信モデル表示）。
   - テスト（Vitest + Testing Library）: 一覧/起票・WS 進捗表示・キャンセル・現行配信表示。

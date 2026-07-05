@@ -3,6 +3,7 @@ import { Route, Routes } from "react-router-dom";
 import ColorMaster from "@/pages/ColorMaster";
 import Dashboard from "@/pages/Dashboard";
 import EdgePc from "@/pages/EdgePc";
+import Retraining from "@/pages/Retraining";
 import TaskList from "@/pages/TaskList";
 import ThresholdManagement from "@/pages/ThresholdManagement";
 
@@ -19,6 +20,7 @@ export default function App() {
       <Route path="/colors" element={<ColorMaster />} />
       <Route path="/thresholds" element={<ThresholdManagement />} />
       <Route path="/edge-pcs" element={<EdgePc />} />
+      <Route path="/retraining" element={<Retraining />} />
     </Routes>
   );
 }
