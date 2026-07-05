@@ -178,6 +178,29 @@ class DeploymentService:
         return DeployStatus.FAILED.value
 
 
+# シングルトン保持（main.py の lifespan で初期化・手動配信 API で参照）。
+_service: DeploymentService | None = None
+
+
+def init_deployment_service(
+    session_factory: Callable[[], Session],
+    edge_pc_repo_factory: Callable[[Session], _EdgePcRepo],
+    config: DeploymentConfig | None = None,
+    ftp_sender: Callable[..., None] = _default_ftp_sender,
+) -> DeploymentService:
+    """シングルトンを初期化して返す（lifespan で呼ぶ）。"""
+    global _service
+    _service = DeploymentService(session_factory, edge_pc_repo_factory, config, ftp_sender)
+    return _service
+
+
+def get_deployment_service() -> DeploymentService:
+    """初期化済みシングルトンを返す（未初期化なら RuntimeError）。"""
+    if _service is None:
+        raise RuntimeError("DeploymentService が未初期化です（lifespan で init してください）")
+    return _service
+
+
 def make_auto_deploy_hook(
     deployment_service: DeploymentService,
 ) -> Callable[[int], object]:

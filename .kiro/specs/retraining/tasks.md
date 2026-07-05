@@ -86,7 +86,7 @@
   - テスト（api）: 行が流れる・None で閉じる・切断時 unsubscribe。
   - Refs: M-R6 ／ commit: `feat(retraining): add websocket progress`
 
-- [~] **8. API: エンドポイント + ルーター登録**
+- [x] **8. API: エンドポイント + ルーター登録**
   - `src/api/retraining_endpoint.py`（`main.py` 登録・Basic 認証ゲート）: `POST /jobs`（**color_master 存在チェック→404**）・
     `GET /jobs`（filter/paging）・`GET /jobs/{id}`・`POST /jobs/{id}/cancel`（終端は **accepted=false** で冪等）・
     `GET /deployed`・`POST /jobs/{id}/deploy`（将来の手動配信）。

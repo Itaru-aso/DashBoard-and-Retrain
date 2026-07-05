@@ -113,6 +113,7 @@ def create_app() -> FastAPI:
     from src.api.color_master_endpoint import router as color_router
     from src.api.dashboard_endpoint import router as dashboard_router
     from src.api.edge_pc_endpoint import router as edge_router
+    from src.api.retraining_endpoint import router as retraining_router
     from src.api.task_endpoint import router as task_router
     from src.api.threshold_endpoint import router as threshold_router
 
@@ -122,6 +123,7 @@ def create_app() -> FastAPI:
     app.include_router(task_router)
     app.include_router(color_router)
     app.include_router(edge_router)
+    app.include_router(retraining_router)
 
     # SPA 配信は最後にマウント（API ルートを優先させる）。
     _mount_frontend(app)
