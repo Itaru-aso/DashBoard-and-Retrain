@@ -81,7 +81,7 @@
     エッジPCなし FAILED／非 COMPLETED は ValueError／ONNX 欠落は FileNotFoundError／deployed upsert。
   - Refs: M-R8 ／ commit: `feat(retraining): add deployment_service (ver2 ftplib, separated)`
 
-- [~] **7. WebSocket 進捗**
+- [x] **7. WebSocket 進捗**
   - `WS /api/retraining/jobs/{id}/progress`: `training_service.subscribe` を購読し**行を素通し**配信、None で close（揮発）。
   - テスト（api）: 行が流れる・None で閉じる・切断時 unsubscribe。
   - Refs: M-R6 ／ commit: `feat(retraining): add websocket progress`
