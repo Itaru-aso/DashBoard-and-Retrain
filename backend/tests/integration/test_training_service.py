@@ -322,3 +322,46 @@ def test_cancel_queued_job_is_skipped(monkeypatch, tmp_path, session_factory) ->
     j2 = asyncio.run(scenario())
     assert _status(session_factory, j2) == JobStatus.CANCELLED.value
     assert "second" not in ran  # キャンセル済みは起動されない
+
+
+@pytest.mark.integration
+def test_cancel_running_job_ends_cancelled(monkeypatch, tmp_path, session_factory) -> None:
+    """RUNNING 中のキャンセルは CANCELLED で確定し、後段の成功判定で FAILED に上書きされない。"""
+    from src.models.retraining_job import JobStatus
+    from src.services.training_service import TrainingService
+
+    cfg = _cfg(tmp_path)
+
+    async def scenario() -> int:
+        gate = asyncio.Event()
+        # kill 時にプロセス終了を模してゲートを開く（ONNX は生成しない＝キャンセル）。
+        monkeypatch.setattr(os, "getpgid", lambda pid: pid, raising=False)
+        monkeypatch.setattr(os, "killpg", lambda pgid, sig: gate.set(), raising=False)
+        _install_fake_subprocess(monkeypatch, lambda cmd, kw: FakeProcess(["学習中..."], gate=gate))
+        svc = TrainingService(session_factory, cfg)
+        await svc.start()
+        jid = _create_job(session_factory, "501")
+        q = svc.subscribe(jid)
+        svc.enqueue(jid)
+
+        # RUNNING に到達するまで待つ。
+        for _ in range(100):
+            if svc.current_job_id == jid:
+                break
+            await asyncio.sleep(0.02)
+        assert svc.current_job_id == jid
+
+        accepted = await svc.cancel(jid)
+        assert accepted is True
+
+        # 進捗ストリームが閉じる（None）まで読み切る。
+        while True:
+            line = await asyncio.wait_for(q.get(), timeout=5)
+            if line is None:
+                break
+        svc.unsubscribe(jid, q)
+        await svc.stop()
+        return jid
+
+    jid = asyncio.run(scenario())
+    assert _status(session_factory, jid) == JobStatus.CANCELLED.value

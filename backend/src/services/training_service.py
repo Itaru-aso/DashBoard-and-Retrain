@@ -182,6 +182,8 @@ class TrainingService:
         """
         async with self._lock:
             if self._current_job_id == job_id and self._current_proc is not None:
+                # 後段の成功判定で FAILED に上書きされないよう、キャンセル済みとして印を付ける。
+                self._cancelled.add(job_id)
                 await self._kill_current()
                 await asyncio.to_thread(self._db_mark_cancelled, job_id, "ユーザによるキャンセル")
                 return True
@@ -216,7 +218,12 @@ class TrainingService:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # noqa: BLE001  ワーカは落とさない
-                await asyncio.to_thread(self._db_mark_failed, job_id, f"内部エラー: {exc!r}")
+                try:
+                    await asyncio.to_thread(self._db_mark_failed, job_id, f"内部エラー: {exc!r}")
+                except Exception:  # noqa: BLE001  記録失敗でもワーカは継続させる
+                    logger.warning(
+                        "ジョブ失敗の記録に失敗しました: job_id=%s", job_id, exc_info=True
+                    )
                 self._hub.publish(job_id, f"[ERROR] {exc!r}")
                 self._hub.close(job_id)
             finally:

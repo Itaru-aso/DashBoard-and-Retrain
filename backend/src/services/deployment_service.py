@@ -49,18 +49,22 @@ class DeploymentConfig:
 
 def _default_ftp_sender(
     host: str,
-    port: int,
-    username: str,
-    password: str,
+    port: int | None,
+    username: str | None,
+    password: str | None,
     local_path: str,
     remote_dir: str,
     remote_name: str,
     timeout: int,
 ) -> None:
-    """ftplib による単一ファイル送信（ver2 自前）。失敗時は例外を送出する。"""
+    """ftplib による単一ファイル送信（ver2 自前）。失敗時は例外を送出する。
+
+    エッジPC の port/username/password は任意（None 可）。edge_pc_service._probe と同じく
+    port 未設定は 21、username/password 未設定は空文字にフォールバックする。
+    """
     with ftplib.FTP(timeout=timeout) as ftp:
-        ftp.connect(host, port)
-        ftp.login(username, password)
+        ftp.connect(host, port or 21)
+        ftp.login(username or "", password or "")
         if remote_dir and remote_dir not in (".", "./"):
             ftp.cwd(remote_dir)
         with open(local_path, "rb") as f:

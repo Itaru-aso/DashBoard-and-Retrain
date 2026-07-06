@@ -52,6 +52,21 @@ def test_status_transitions_persist(db_session: Session) -> None:
 
 
 @pytest.mark.integration
+def test_updated_at_advances_on_transition(db_session: Session) -> None:
+    repo = _repo(db_session)
+    job = repo.create_job(color_no="001", size="05", chain="CZT8")
+
+    repo.mark_running(job.id)
+    u1 = repo.get(job.id).updated_at
+    repo.mark_completed(job.id, onnx_monochro_path="/m", onnx_color_path="/c")
+    u2 = repo.get(job.id).updated_at
+
+    # 状態遷移のたびに updated_at が前進する（作成時刻のまま据え置かれない）。
+    assert u1 is not None and u2 is not None
+    assert u2 > u1
+
+
+@pytest.mark.integration
 def test_mark_running_missing_raises(db_session: Session) -> None:
     repo = _repo(db_session)
     with pytest.raises(ValueError):

@@ -176,6 +176,53 @@ def test_deploy_rejects_non_completed(session_factory, tmp_path) -> None:
 
 
 @pytest.mark.integration
+def test_default_ftp_sender_falls_back_on_none(monkeypatch, tmp_path) -> None:
+    """port/username/password が None でも 21/空文字にフォールバックして接続する。"""
+    import ftplib
+
+    from src.services.deployment_service import _default_ftp_sender
+
+    captured: dict = {}
+
+    class _FakeFTP:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def connect(self, host, port):
+            captured["port"] = port
+
+        def login(self, user, password):
+            captured["login"] = (user, password)
+
+        def storbinary(self, cmd, f):
+            captured["stor"] = cmd
+
+    monkeypatch.setattr(ftplib, "FTP", _FakeFTP)
+    local = tmp_path / "m.onnx"
+    local.write_bytes(b"onnx")
+
+    _default_ftp_sender(
+        host="h",
+        port=None,
+        username=None,
+        password=None,
+        local_path=str(local),
+        remote_dir=".",
+        remote_name="501_color_model.onnx",
+        timeout=5,
+    )
+    assert captured["port"] == 21
+    assert captured["login"] == ("", "")
+    assert captured["stor"] == "STOR 501_color_model.onnx"
+
+
+@pytest.mark.integration
 def test_deploy_missing_onnx_raises(session_factory, tmp_path) -> None:
     from src.repositories.retraining_repository import RetrainingRepository
 

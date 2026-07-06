@@ -80,6 +80,7 @@ class RetrainingRepository:
         job = self._require(job_id)
         job.status = JobStatus.RUNNING.value
         job.started_at = _now()
+        job.updated_at = _now()
         self._db.flush()
 
     def mark_completed(self, job_id: int, onnx_monochro_path: str, onnx_color_path: str) -> None:
@@ -90,6 +91,7 @@ class RetrainingRepository:
         job.onnx_monochro_path = onnx_monochro_path
         job.onnx_color_path = onnx_color_path
         job.error_message = None
+        job.updated_at = _now()
         self._db.flush()
 
     def mark_failed(self, job_id: int, error_message: str) -> None:
@@ -98,6 +100,7 @@ class RetrainingRepository:
         job.status = JobStatus.FAILED.value
         job.finished_at = _now()
         job.error_message = error_message[:4000] if error_message else None
+        job.updated_at = _now()
         self._db.flush()
 
     def mark_cancelled(self, job_id: int, reason: str | None = None) -> None:
@@ -107,6 +110,7 @@ class RetrainingRepository:
         job.finished_at = _now()
         if reason:
             job.error_message = reason[:4000]
+        job.updated_at = _now()
         self._db.flush()
 
     def _require(self, job_id: int) -> RetrainingJob:
@@ -170,5 +174,6 @@ class RetrainingRepository:
             rec.deploy_status = deploy_status
             rec.deploy_detail = detail_json
             rec.deployed_at = _now()
+            rec.updated_at = _now()
         self._db.flush()
         return rec
