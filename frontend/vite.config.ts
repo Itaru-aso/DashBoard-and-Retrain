@@ -14,7 +14,8 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": "http://localhost:8000",
+      // ws:true で WebSocket（再学習の進捗配信）も backend へ転送する。
+      "/api": { target: "http://localhost:8000", changeOrigin: true, ws: true },
     },
   },
   test: {

@@ -56,17 +56,6 @@ export interface DeployResult {
   edge_pc_count: number;
 }
 
-/** 表示用に detail などを渡せる軽量エラー型（テスト・UI での型付けに使用）。 */
-export class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message);
-    this.name = "ApiError";
-  }
-}
-
 export async function listJobs(params?: {
   status?: JobStatus;
   limit?: number;
