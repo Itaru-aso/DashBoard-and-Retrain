@@ -100,7 +100,7 @@
   - テスト（Vitest + Testing Library）: 一覧/起票・WS 進捗表示・キャンセル・現行配信表示。
   - Refs: M-R1, M-R5, M-R6, M-R7, M-R8 ／ commit: `feat(retraining): add retraining screen`
 
-- [ ] **10. 配線・仕上げ: lifespan 配線＋検証ゲート**
+- [x] **10. 配線・仕上げ: lifespan 配線＋検証ゲート**
   - `main.py` lifespan で `deployment_service` 生成→`init_training_service`（on_completed に自動配信フック）→`start()`、終了で `stop()`。
     `config.py` に `training_dir`/`training_model_dir`/`training_python`。`dependencies.py` に DI（color_master/deployment）。
   - 全テスト・`black`/`flake8`/`mypy`、front の `tsc`/`eslint`/`vitest` をグリーンに。カバレッジ 80% 以上。

@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     # --- 再学習（training/ 連携） ---
     TRAINING_DATASET_PATH: str = ""
     TRAINING_PIPELINE_DIR: str = ""
+    # training_service が subprocess 起動に使う（CWD＝TRAINING_DIR・ONNX 出力ルート＝TRAINING_MODEL_DIR）。
+    TRAINING_DIR: str = ""
+    TRAINING_MODEL_DIR: str = ""
+    TRAINING_PYTHON: str = "python"
 
     # --- 日次集計ジョブ（アプリ内スケジューラ） ---
     AGG_RUN_TIME: str = "02:00"

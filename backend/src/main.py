@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator
+from typing import TYPE_CHECKING, AsyncIterator
 
 from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
@@ -26,6 +26,9 @@ from starlette.types import Scope
 from src import config, database
 from src.logging_config import configure_logging
 from src.scheduler import create_scheduler
+
+if TYPE_CHECKING:
+    from src.services.training_service import TrainingService
 
 logger = logging.getLogger(__name__)
 
@@ -88,16 +91,56 @@ def _mount_frontend(app: FastAPI) -> None:
     app.mount("/", _SPAStaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
 
+def _init_retraining_services() -> "TrainingService":
+    """再学習の deployment/training サービスを生成し配線する（単一所有・lifespan から呼ぶ）。
+
+    - deployment_service: ver2 自前 ftplib で有効エッジPCへ配信（現行モデル更新）。
+    - training_service: キュー・subprocess・進捗。COMPLETED 時に v1 自動配信フックを実行。
+    """
+    from src.database import SessionLocal
+    from src.repositories.edge_pc_repository import EdgePcRepository
+    from src.services.deployment_service import (
+        DeploymentConfig,
+        init_deployment_service,
+        make_auto_deploy_hook,
+    )
+    from src.services.training_service import (
+        TrainingConfig,
+        init_training_service,
+    )
+
+    deployment_service = init_deployment_service(
+        session_factory=SessionLocal,
+        edge_pc_repo_factory=lambda db: EdgePcRepository(db),
+        config=DeploymentConfig(),
+    )
+    training_service = init_training_service(
+        session_factory=SessionLocal,
+        config=TrainingConfig(
+            training_dir=config.settings.TRAINING_DIR,
+            model_dir=config.settings.TRAINING_MODEL_DIR,
+            python_executable=config.settings.TRAINING_PYTHON,
+        ),
+        on_completed=make_auto_deploy_hook(deployment_service),
+    )
+    return training_service
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """起動時にスケジューラを開始し、終了時に停止する（単一所有）。"""
+    """起動時にスケジューラと再学習ワーカを開始し、終了時に停止する（単一所有）。"""
     configure_logging()
     scheduler = create_scheduler()
     scheduler.start()
     app.state.scheduler = scheduler
+
+    training_service = _init_retraining_services()
+    await training_service.start()  # 復旧（best-effort）＋ワーカ起動
+    app.state.training_service = training_service
     try:
         yield
     finally:
+        await training_service.stop()  # 実行中はプロセスグループごと停止
         scheduler.shutdown(wait=False)
 
 

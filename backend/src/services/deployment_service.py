@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ftplib
 import os
+from collections.abc import Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Callable, Iterator, Protocol
@@ -26,15 +27,16 @@ from src.repositories.retraining_repository import RetrainingRepository
 
 
 class _EnabledEdgePc(Protocol):
+    # EdgePc モデルと構造的に一致させる（配信先解決の参照点）。
     name: str
     host: str
-    username: str
-    password: str
-    model_port: int
+    username: str | None
+    password: str | None
+    model_port: int | None
 
 
 class _EdgePcRepo(Protocol):
-    def find_enabled(self) -> list[_EnabledEdgePc]: ...
+    def find_enabled(self) -> Sequence[_EnabledEdgePc]: ...
 
 
 @dataclass

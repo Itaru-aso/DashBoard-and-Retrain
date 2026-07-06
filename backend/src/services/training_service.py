@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import signal
 from collections import deque
@@ -29,6 +30,8 @@ from sqlalchemy.orm import Session
 
 from src.models.retraining_job import JobStatus
 from src.repositories.retraining_repository import RetrainingRepository
+
+logger = logging.getLogger(__name__)
 
 COMPLETION_MARKER = "パイプライン完了"
 _RECENT_LINES = 200  # WS 後追い接続者向けの直近ログ保持数（揮発）
@@ -152,14 +155,18 @@ class TrainingService:
             self._worker = None
 
     def _recover_on_start(self) -> None:
-        with self._session_scope() as db:
-            repo = RetrainingRepository(db)
-            for job in repo.list_active():
-                if job.status == JobStatus.RUNNING.value:
-                    # プロセスはプロセス再起動で失われている。
-                    repo.mark_failed(job.id, "プロセス再起動により中断されました")
-                else:  # QUEUED → 再投入
-                    self._queue.put_nowait(job.id)
+        # 復旧は best-effort。DB 到達不能でも起動をクラッシュさせない（ワーカは起動する）。
+        try:
+            with self._session_scope() as db:
+                repo = RetrainingRepository(db)
+                for job in repo.list_active():
+                    if job.status == JobStatus.RUNNING.value:
+                        # プロセスはプロセス再起動で失われている。
+                        repo.mark_failed(job.id, "プロセス再起動により中断されました")
+                    else:  # QUEUED → 再投入
+                        self._queue.put_nowait(job.id)
+        except Exception:  # noqa: BLE001  起動時 DB エラーは握りつぶす（復旧は次回に委ねる）
+            logger.warning("再学習ジョブの起動時復旧に失敗しました（続行）", exc_info=True)
 
     # ---- 公開 API（API 層から呼ぶ） ----
 
