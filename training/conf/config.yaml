@@ -1,0 +1,261 @@
+defaults:
+  - override hydra/sweeper: optuna
+hydra:
+  sweeper:
+    direction: maximize
+    study_name: null
+    storage: null
+    n_trials: 20
+    n_jobs: 2
+
+# 共通設定
+common:
+  target_color: '841'
+  pretraining_dir: ./0_pretraining   # 学習入力 (Teacher 重み)
+  dataset_path: ./4_dataset
+  model_dir: ./6_model
+  backup_dir: ./backup
+  download_dir: ./1_download
+  pool_base: ./3_pool
+  staging_dir: ./2_staging
+  splits_dir: ./5_splits
+  batch_size: 4
+  persistent_workers: true   # ワーカーをエポック間で使い回す (Windows spawn の再起動ストーム回避)
+  gpu_id: 0
+  seed: 42
+  out_channels: 384
+  imagenet_train_path: D:/0032011/ILSVRC/Data/CLS-LOC/train
+  ftp_common:
+    local_root: ./annotated_data
+  ftp_hosts:
+    - name: 検査PC_1
+      host: 169.254.93.171
+      username: ykk\shisui_PJ
+      password: shisui@09
+      monochro_port: 2121
+      color_port: 2122
+      model_port: 2123
+  pipeline_mode: train
+  parallel_train: true
+  mode: 'color'
+  # ver2 連携用の配信分離フラグ (既定 false: 従来どおり FTP DL/配信を行う・後方互換)
+  skip_download: false   # true: FTP ダウンロードをスキップ (画像は別機能が 1_download に事前配置)
+  skip_upload: false     # true: FTP アップロードをスキップ (配信は ver2 deployment_service が担う)
+
+# モノクロ専用
+monochro:
+  # 基本パラメータ
+  image_size_height: 256
+  image_size_width: 512
+  model_size: small
+  backbone: wide_resnet101
+  teacher_weights: null
+
+  # 撮像系の水平シフト不変性獲得用 augmentation (raw 段階の crop x 揺らし)
+  # 推論時は C# 側で crop x=485 固定で前処理されるが、学習時は raw 画像から
+  # crop_offset_x = uniform(-crop_shift_max_px, +crop_shift_max_px) でランダムに
+  # ずらして学習することで、再検証で観測された +14 px 程度のシフトに耐えるモデルを得る。
+  # raw_image_root 配下を {raw_image_root}/{target_color}/monochro/good/ で再帰探索する。
+  use_raw_shift_dataset: true
+  raw_image_root: ./1_download
+  crop_shift_max_px: 20
+
+  num_workers: 8
+
+  # 学習ハイパラ
+  epochs: 50           # color と同等 (旧 50 → 31 で学習時間 -38% 見込み、early_stop が効いてれば精度影響小)
+  train_step: 50000
+  max_train_step: 30000
+  val_interval: 2000        # validation 周期 (step 単位)。null なら len(train_loader)
+  early_stop_patience: 4
+  early_stop_min_delta: 0.005
+  hard_mining_quantile: 0.999
+  pdn_dropout: 0.0
+  st_loss_type: focal
+  focal_gamma: 2.0
+  penalty_weight: 1.0
+
+  # 損失重み
+  loss_st: 5.0
+  loss_ae: 1.0
+  loss_stae: 1.0
+
+  # map 重み (AE 無効)
+  map_st: 1.0
+  map_ae: 0.0
+
+  # Channel Weights
+  channel_weights:
+    enabled: true
+    supervised_power: 10
+    unsupervised_power: 7
+    blend_n_mid: 30        # sigmoid blend の中点 (50/50 になる test/defect 枚数)
+    blend_scale: 10.0      # sigmoid の遷移急峻さ (大きいほど緩やか)
+    max_fpr: 0.05          # pAUC で見る FPR 上限 (運用 FPR=0.03 にマージン)
+
+  # 評価・閾値
+  cutoff: 0.33
+  recall_threshold: 0.8
+
+  # pool / staging
+  pool_train_ratio: 0.7
+  defect_staging:
+    enabled: true
+    clear_before_download: false
+    auto_split_halves: true
+
+  # 評価
+  evaluate:
+    num_thresholds: 200
+    miss_rate_constraint: null
+
+  # Optimizer
+  model:
+    lr: 0.0003
+    weight_decay: 1.0e-05
+    gamma: 0.1
+
+  # Augmentation (grayscale 前提で saturation=0.0)
+  st_augmentation:
+    enabled: true
+    horizontal_flip: true
+    color_jitter_brightness: 0.1
+    color_jitter_contrast: 0.1
+    color_jitter_saturation: 0.0
+  penalty_augmentation:
+    grayscale_p: 1.0
+    horizontal_flip: true
+    color_jitter_brightness: 0.2
+    color_jitter_contrast: 0.2
+    color_jitter_saturation: 0.0
+    random_erasing_p: 0.1
+  augmentation:
+    monochro:
+      ae_color_jitter_brightness: 0.2
+      ae_color_jitter_contrast: 0.2
+      ae_color_jitter_saturation: 0.0
+      ae_gaussian_blur_kernel: 3
+      ae_gaussian_blur_sigma_min: 0.1
+      ae_gaussian_blur_sigma_max: 1.0
+      ae_gaussian_noise_std: 0.02
+      ae_random_affine_degrees: 2
+      ae_random_affine_translate: [0.03, 0.03]
+
+  # MLflow
+  mlflow:
+    enabled: false
+    tracking_uri: ./mlruns
+    experiment_name_template: "efficientad_monochro_{color}"
+    run_name_template: "pipeline_{timestamp}_{variant}"
+    run_name: null
+    variant: null
+    targets:
+      fpr: 0.03
+      fnr: 0.05
+    log:
+      train_step_interval: 500
+      onnx_model: false  # ONNX artifact 保存は重いので OFF (必要に応じて true)
+      fp_fn_samples: true
+      fp_fn_samples_max: 10
+      fp_fn_samples_annotate: true
+      heatmaps: false
+      score_distribution: true
+      roc_curve: true
+      confusion_matrix: true
+    extra_tags:
+      project: "zipper_ad"
+      model_family: "efficientad"
+
+# カラー専用
+color:
+  image_size_height: 384
+  image_size_width: 512
+  model_size: small
+  backbone: wide_resnet101
+  teacher_weights: null
+  num_workers: 4
+  epochs: 40           # monochro と同等 (旧 50 → 31 で学習時間 -38% 見込み、early_stop が効いてれば精度影響小)
+  train_step: 50000
+  max_train_step: 25000
+  val_interval: 2000        # validation 周期 (step 単位)。null なら len(train_loader)
+  early_stop_patience: 4
+  early_stop_min_delta: 0.005
+  hard_mining_quantile: 0.999
+  pdn_dropout: 0.0
+  st_loss_type: focal
+  focal_gamma: 2.0
+  penalty_weight: 1.0
+  loss_st: 5.0
+  loss_ae: 1.0
+  loss_stae: 1.0
+  map_st: 1.0
+  map_ae: 0.0
+  channel_weights:
+    enabled: true
+    supervised_power: 10
+    unsupervised_power: 7
+    blend_n_mid: 30        # sigmoid blend の中点 (50/50 になる test/defect 枚数)
+    blend_scale: 10.0      # sigmoid の遷移急峻さ (大きいほど緩やか)
+    max_fpr: 0.05          # pAUC で見る FPR 上限 (運用 FPR=0.03 にマージン)
+  edge_mask_w: 2           # 両端 N pixel を loss/quantile/threshold 計算から除外 (padding artifact 抑制)
+  cutoff: 0.33
+  recall_threshold: 0.8
+  pool_train_ratio: 0.7
+  defect_staging:
+    enabled: true
+    clear_before_download: false
+    auto_split_halves: true
+  evaluate:
+    num_thresholds: 200
+    miss_rate_constraint: null
+  model:
+    lr: 0.0003
+    weight_decay: 1.0e-05
+    gamma: 0.1
+  st_augmentation:
+    enabled: true
+    horizontal_flip: true
+    color_jitter_brightness: 0.1
+    color_jitter_contrast: 0.1
+    color_jitter_saturation: 0.1
+  penalty_augmentation:
+    grayscale_p: 0.3
+    horizontal_flip: true
+    color_jitter_brightness: 0.2
+    color_jitter_contrast: 0.2
+    color_jitter_saturation: 0.2
+    random_erasing_p: 0.1
+  augmentation:
+    color:
+      ae_color_jitter_brightness: 0.2
+      ae_color_jitter_contrast: 0.2
+      ae_color_jitter_saturation: 0.2
+      ae_gaussian_blur_kernel: 3
+      ae_gaussian_blur_sigma_min: 0.1
+      ae_gaussian_blur_sigma_max: 1.0
+      ae_gaussian_noise_std: 0.02
+      ae_random_affine_degrees: 2
+      ae_random_affine_translate: [0.03, 0.03]
+  mlflow:
+    enabled: false
+    tracking_uri: ./mlruns
+    experiment_name_template: "efficientad_color_{color}"
+    run_name_template: "pipeline_{timestamp}_{variant}"
+    run_name: null
+    variant: null
+    targets:
+      fpr: 0.03
+      fnr: 0.05
+    log:
+      train_step_interval: 500
+      onnx_model: false  # ONNX artifact 保存は重いので OFF (必要に応じて true)
+      fp_fn_samples: true
+      fp_fn_samples_max: 10
+      fp_fn_samples_annotate: true
+      heatmaps: false
+      score_distribution: true
+      roc_curve: true
+      confusion_matrix: true
+    extra_tags:
+      project: "zipper_ad"
+      model_family: "efficientad"

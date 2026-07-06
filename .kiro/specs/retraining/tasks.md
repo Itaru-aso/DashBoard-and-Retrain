@@ -31,7 +31,7 @@
 
 ## タスク (Tasks)
 
-- [~] **0. 学習側の薄い改修（`training/pipline.py`・ロジック不変）**
+- [x] **0. 学習側の薄い改修（`training/pipline.py`・ロジック不変）**
   - `execute()` の **FTP ダウンロードを `common.skip_download` でガード**（608–613）、
     **FTP アップロードを `common.skip_upload` でガード**（689–690）。`conf/config.yaml` の `common` に両既定 `false` を追記。
   - （任意）末尾の `パイプライン完了` 前に **ONNX 未生成なら `sys.exit(1)`**、節目に `[PROGRESS] ...` を print。
