@@ -2,6 +2,7 @@
 #   - ver2-db      : ver2 DB（自前・読み書き・独立ボリューム）
 #   - inspection-db: 業者検査 DB 代役（dump ロードは scripts/ で後日。ここは空の代役）
 #   - backend      : ver2 バックエンド（API＋スケジューラ＋再学習。uvicorn --workers 1）
+#   - pgadmin      : DB 確認用（ver2-db / inspection-db を起動時に自動登録。開発専用）
 #
 # 本番の業者検査 DB はコンテナ化せず、INSPECTION_DATABASE_URL で外部へ読み取り接続する。
 # フロントは開発では Vite devserver（別プロセス）。本番は backend が dist/ を配信する。
@@ -63,6 +64,23 @@ services:
     #           count: all
     #           capabilities: [gpu]
 
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@shisui.dev
+      PGADMIN_DEFAULT_PASSWORD: shisui
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+    ports:
+      - "5050:80"
+    depends_on:
+      ver2-db:
+        condition: service_healthy
+      inspection-db:
+        condition: service_healthy
+
 volumes:
   ver2-db-data:
   inspection-db-data:
+  pgadmin-data:

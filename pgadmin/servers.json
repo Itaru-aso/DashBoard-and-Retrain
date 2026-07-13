@@ -1,0 +1,22 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "ver2-db",
+      "Group": "shisui",
+      "Host": "ver2-db",
+      "Port": 5432,
+      "MaintenanceDB": "ver2",
+      "Username": "shisui",
+      "SSLMode": "prefer"
+    },
+    "2": {
+      "Name": "inspection-db (app_db)",
+      "Group": "shisui",
+      "Host": "inspection-db",
+      "Port": 5432,
+      "MaintenanceDB": "app_db",
+      "Username": "readonly",
+      "SSLMode": "prefer"
+    }
+  }
+}
