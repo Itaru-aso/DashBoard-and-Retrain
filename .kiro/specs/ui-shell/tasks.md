@@ -25,7 +25,7 @@
   - 検証: `npm run dev` で背景色・フォントが適用されることを目視確認（自動テスト対象外）。
   - Refs: UI-R4 ／ commit: `feat(ui-shell): add design tokens and self-hosted mono font`
 
-- [ ] **2. `Header` コンポーネント**
+- [x] **2. `Header` コンポーネント**
   - `frontend/src/components/Header.tsx` + `Header.module.css`。ロゴ・アプリ名・サブタイトル・
     エッジPC稼働の静的プレースホルダー・「オンプレ LAN」バッジ。アバターは持たない。
   - テスト（Vitest + Testing Library）: ロゴ・アプリ名・プレースホルダーテキストが描画されること。
