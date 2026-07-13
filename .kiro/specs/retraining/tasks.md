@@ -106,14 +106,26 @@
   - 全テスト・`black`/`flake8`/`mypy`、front の `tsc`/`eslint`/`vitest` をグリーンに。カバレッジ 80% 以上。
   - commit: `chore(retraining): wire lifespan and satisfy verification gate`
 
+- [x] **11. フロント: 画面デザイン刷新（`ui-shell` 準拠・見た目のみ）**
+  - モックアップ（`Shisui Dashboard (standalone).html`）を参照し `Retraining.tsx` をダーク基調に作り直す。
+    モックアップは「サイズ/チェーン/色番を複数選択してまとめて1回実行」という単一パネルだが、
+    本 spec は**単一フルタプルごとにジョブを起票**する運用モデル（履歴一覧・WSライブ進捗・キャンセル・
+    現行配信モデル一覧を含む）のため、モックアップの構造には簡略化しない。**既存機能はすべて残し、
+    見た目（パネル化・ダーク配色・JetBrains Mono表示・ライブログのモノスペース表示）のみ合わせる**
+    （brainstormingで確認済み）。AIメトリクスカード（データソース不明）は本specに無いためスコープ外。
+  - テスト: 既存7テストが無変更で通ることを確認。
+  - 代替検証: `npm run dev`（バックエンド接続）で目視確認。
+  - Refs: M-R1, M-R5, M-R6, M-R7, M-R8 ／
+    commit: `feat(retraining): restyle retraining screen with ui-shell design`
+
 ---
 
 ## トレーサビリティ (Requirements ↔ Tasks)
 
-- M-R1（起票・手動・存在チェック）→ 3, 8 ／ M-R2（キュー・同時1）→ 5
-- M-R3（subprocess・GPU・skip_download/upload）→ 0, 5 ／ M-R4（状態遷移・成功判定）→ 5 ／ M-R5（キャンセル）→ 5, 8
-- M-R6（WS 進捗・素通し）→ 5, 7, 9 ／ M-R7（記録・履歴・復旧）→ 1, 2, 4, 8
-- M-R8（配信・現行モデル・学習と分離）→ 0, 1, 6, 8 ／ M-R9（認証）→ 8
+- M-R1（起票・手動・存在チェック）→ 3, 8, 11 ／ M-R2（キュー・同時1）→ 5
+- M-R3（subprocess・GPU・skip_download/upload）→ 0, 5 ／ M-R4（状態遷移・成功判定）→ 5 ／ M-R5（キャンセル）→ 5, 8, 11
+- M-R6（WS 進捗・素通し）→ 5, 7, 9, 11 ／ M-R7（記録・履歴・復旧）→ 1, 2, 4, 8, 11
+- M-R8（配信・現行モデル・学習と分離）→ 0, 1, 6, 8, 11 ／ M-R9（認証）→ 8
 
 > 注: 実学習・実 FTP・プロセス kill はテストでモック。CUDA は学習側 cu121→**cu128 系へ入替**前提（Blackwell・`tech.md`）。
 > 配信先 ONNX のリモート名は検査PC互換のため color_no ベース固定（ver2 の記録はフルタプル＝案A）。

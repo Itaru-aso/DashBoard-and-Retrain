@@ -9,6 +9,8 @@ import {
   useJobs,
 } from "@/hooks/useRetraining";
 
+import styles from "./Retraining.module.css";
+
 const STATUS_LABEL: Record<JobStatus, string> = {
   QUEUED: "待機中",
   RUNNING: "学習中",
@@ -44,27 +46,39 @@ function CreateJobForm() {
   };
 
   return (
-    <section>
-      <h2>再学習を起票</h2>
-      <div>
-        <label htmlFor="rt-color">色番</label>
-        <input id="rt-color" value={form.color_no} onChange={update("color_no")} />
-        <label htmlFor="rt-size">サイズ</label>
-        <input id="rt-size" value={form.size} onChange={update("size")} />
-        <label htmlFor="rt-chain">チェーン</label>
-        <input id="rt-chain" value={form.chain} onChange={update("chain")} />
-        <label htmlFor="rt-tape">テープ</label>
-        <input id="rt-tape" value={form.tape} onChange={update("tape")} />
-        <label htmlFor="rt-by">起票者</label>
-        <input id="rt-by" value={form.created_by} onChange={update("created_by")} />
+    <div className={styles.panel}>
+      <span className={styles.panelTitle}>再学習を起票</span>
+      <div className={styles.formRow}>
+        <div className={styles.field}>
+          <label htmlFor="rt-color">色番</label>
+          <input id="rt-color" value={form.color_no} onChange={update("color_no")} />
+        </div>
+        <div className={styles.field}>
+          <label htmlFor="rt-size">サイズ</label>
+          <input id="rt-size" value={form.size} onChange={update("size")} />
+        </div>
+        <div className={styles.field}>
+          <label htmlFor="rt-chain">チェーン</label>
+          <input id="rt-chain" value={form.chain} onChange={update("chain")} />
+        </div>
+        <div className={styles.field}>
+          <label htmlFor="rt-tape">テープ</label>
+          <input id="rt-tape" value={form.tape} onChange={update("tape")} />
+        </div>
+        <div className={styles.field}>
+          <label htmlFor="rt-by">起票者</label>
+          <input id="rt-by" value={form.created_by} onChange={update("created_by")} />
+        </div>
+        <button type="button" className={styles.submitButton} onClick={submit} disabled={!canSubmit}>
+          {create.isPending ? "起票中…" : "再学習を起票"}
+        </button>
       </div>
-      <button type="button" onClick={submit} disabled={!canSubmit}>
-        {create.isPending ? "起票中…" : "再学習を起票"}
-      </button>
       {create.isError && (
-        <p role="alert">起票できませんでした: {(create.error as Error).message}</p>
+        <p role="alert" className={styles.error}>
+          起票できませんでした: {(create.error as Error).message}
+        </p>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -73,15 +87,18 @@ function ProgressPanel({ job }: { job: Job }) {
   const { lines, state } = useJobProgress(job.id, active);
 
   return (
-    <section>
-      <h2>
+    <div className={styles.progressCard}>
+      <span className={styles.panelTitle}>
         進捗 — ジョブ #{job.id}（{job.color_no}/{job.size}/{job.chain}/{job.tape || "—"}）
-      </h2>
-      <p>
-        {STATUS_LABEL[job.status]}
-        {active ? (state === "open" ? " 配信中" : " 接続中…") : " 学習は終了しています"}
-      </p>
-      <pre aria-live="polite" aria-label="学習ログ">
+      </span>
+      <div className={styles.statusRow}>
+        <span className={styles.pulseDot} />
+        <span>
+          {STATUS_LABEL[job.status]}
+          {active ? (state === "open" ? " 配信中" : " 接続中…") : " 学習は終了しています"}
+        </span>
+      </div>
+      <pre aria-live="polite" aria-label="学習ログ" className={styles.logBox}>
         {lines.length
           ? lines.join("\n")
           : active
@@ -89,9 +106,11 @@ function ProgressPanel({ job }: { job: Job }) {
             : "ライブログはありません（終了済み）。"}
       </pre>
       {job.status === "FAILED" && job.error_message && (
-        <p role="alert">失敗理由: {job.error_message}</p>
+        <p role="alert" className={styles.error}>
+          失敗理由: {job.error_message}
+        </p>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -105,50 +124,57 @@ function JobsTable({
 
   if (isLoading) return <p>履歴を読み込み中…</p>;
   if (isError)
-    return <p role="alert">履歴を取得できませんでした: {(error as Error).message}</p>;
+    return (
+      <p role="alert" className={styles.error}>
+        履歴を取得できませんでした: {(error as Error).message}
+      </p>
+    );
 
   const jobs = data?.items ?? [];
   if (!jobs.length)
     return <p>まだ再学習はありません。上のフォームから起票してください。</p>;
 
   return (
-    <table>
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>色（フルタプル）</th>
-          <th>状態</th>
-          <th>起票</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody>
-        {jobs.map((j) => (
-          <tr key={j.id}>
-            <td>{j.id}</td>
-            <td>
-              {j.color_no}/{j.size}/{j.chain}/{j.tape || "—"}
-            </td>
-            <td>{STATUS_LABEL[j.status]}</td>
-            <td>{new Date(j.queued_at).toLocaleString()}</td>
-            <td>
-              <button type="button" onClick={() => onSelect(j.id)}>
-                進捗
-              </button>
-              {!isTerminal(j.status) && (
-                <button
-                  type="button"
-                  onClick={() => cancel.mutate(j.id)}
-                  disabled={cancel.isPending}
-                >
-                  キャンセル
-                </button>
-              )}
-            </td>
+    <div className={styles.tableWrap}>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>色（フルタプル）</th>
+            <th>状態</th>
+            <th>起票</th>
+            <th>操作</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {jobs.map((j) => (
+            <tr key={j.id}>
+              <td className={styles.mono}>{j.id}</td>
+              <td className={styles.mono}>
+                {j.color_no}/{j.size}/{j.chain}/{j.tape || "—"}
+              </td>
+              <td>{STATUS_LABEL[j.status]}</td>
+              <td className={styles.mono}>{new Date(j.queued_at).toLocaleString()}</td>
+              <td>
+                <button type="button" className={styles.actionButton} onClick={() => onSelect(j.id)}>
+                  進捗
+                </button>
+                {!isTerminal(j.status) && (
+                  <button
+                    type="button"
+                    className={styles.actionButton}
+                    onClick={() => cancel.mutate(j.id)}
+                    disabled={cancel.isPending}
+                  >
+                    キャンセル
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -159,28 +185,30 @@ function DeployedTable() {
   if (!rows.length) return <p>配信済みの現行モデルはまだありません。</p>;
 
   return (
-    <table>
-      <thead>
-        <tr>
-          <th>色（フルタプル）</th>
-          <th>由来ジョブ</th>
-          <th>配信状態</th>
-          <th>配信日時</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((d) => (
-          <tr key={d.id}>
-            <td>
-              {d.color_no}/{d.size}/{d.chain}/{d.tape || "—"}
-            </td>
-            <td>#{d.job_id}</td>
-            <td>{d.deploy_status}</td>
-            <td>{new Date(d.deployed_at).toLocaleString()}</td>
+    <div className={styles.tableWrap}>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>色（フルタプル）</th>
+            <th>由来ジョブ</th>
+            <th>配信状態</th>
+            <th>配信日時</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((d) => (
+            <tr key={d.id}>
+              <td className={styles.mono}>
+                {d.color_no}/{d.size}/{d.chain}/{d.tape || "—"}
+              </td>
+              <td className={styles.mono}>#{d.job_id}</td>
+              <td>{d.deploy_status}</td>
+              <td className={styles.mono}>{new Date(d.deployed_at).toLocaleString()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
