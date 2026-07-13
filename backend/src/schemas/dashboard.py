@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime
 
 from pydantic import BaseModel, model_validator
@@ -51,7 +52,7 @@ class SummaryOut(BaseModel):
 class RecordOut(BaseModel):
     """明細1件。"""
 
-    image_id: int
+    image_id: uuid.UUID
     inspect_timestamp: datetime
     unit: str | None
     camera_model: str | None
@@ -66,7 +67,7 @@ class CursorOut(BaseModel):
     """明細キーセットのカーソル。"""
 
     inspect_timestamp: datetime
-    image_id: int
+    image_id: uuid.UUID
 
 
 class RecordsOut(BaseModel):

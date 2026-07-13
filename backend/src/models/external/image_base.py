@@ -10,11 +10,12 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, Integer, String
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import DateTime, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.models.external.base import ExternalBase
@@ -26,7 +27,7 @@ class ImageBase(ExternalBase):
     __tablename__ = "image_base"
     __table_args__ = {"schema": "annotation"}
 
-    image_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    image_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     inspect_timestamp: Mapped[datetime] = mapped_column(DateTime)
     unit: Mapped[str | None] = mapped_column(String)
     camera_model: Mapped[str | None] = mapped_column(String)

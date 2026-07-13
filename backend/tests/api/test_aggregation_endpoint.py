@@ -10,6 +10,7 @@ get_db / get_inspection_db をテスト用セッション（ver2 / app_db 代役
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import Iterator
 from datetime import date, datetime
 
@@ -37,7 +38,7 @@ def _seed_one(session: Session, image_id: int, day: date) -> None:
             "VALUES (:id, :ts, '1', 'camera1_image', 0, CAST(:extra AS jsonb))"
         ),
         {
-            "id": image_id,
+            "id": uuid.UUID(int=image_id),
             "ts": datetime(day.year, day.month, day.day, 10, 0, 0),
             "extra": json.dumps({"colorNo": "501", "size": "05", "chain": "CZT8", "tape": ""}),
         },
@@ -47,7 +48,7 @@ def _seed_one(session: Session, image_id: int, day: date) -> None:
             "INSERT INTO annotation.annotation_item (image_id, dataset_id, item_id, use_flg) "
             "VALUES (:img, 1, 10, true)"
         ),
-        {"img": image_id},
+        {"img": uuid.UUID(int=image_id)},
     )
     session.flush()
 

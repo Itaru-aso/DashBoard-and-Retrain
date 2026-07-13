@@ -7,6 +7,7 @@ app_db `annotation.image_base` を**オンザフライ**（期間パーティシ
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -16,14 +17,14 @@ from sqlalchemy.orm import Session
 
 from src.models.external.image_base import ImageBase
 
-Cursor = tuple[datetime, int]
+Cursor = tuple[datetime, uuid.UUID]
 
 
 @dataclass(frozen=True)
 class DetailRow:
     """明細1行（フルタプルは extra_info から抽出）。"""
 
-    image_id: int
+    image_id: uuid.UUID
     inspect_timestamp: datetime
     unit: str | None
     camera_model: str | None

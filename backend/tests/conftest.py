@@ -119,7 +119,7 @@ _INSPECTION_SCHEMA_DDL = (
     "CREATE SCHEMA IF NOT EXISTS annotation",
     (
         "CREATE TABLE annotation.image_base ("
-        " image_id bigint PRIMARY KEY,"
+        " image_id uuid PRIMARY KEY,"
         " inspect_timestamp timestamp NOT NULL,"
         " unit text,"
         " camera_model text,"
@@ -129,7 +129,7 @@ _INSPECTION_SCHEMA_DDL = (
     (
         "CREATE TABLE annotation.annotation_item ("
         " id bigserial PRIMARY KEY,"
-        " image_id bigint NOT NULL,"
+        " image_id uuid NOT NULL,"
         " dataset_id integer NOT NULL,"
         " item_id integer NOT NULL,"
         " use_flg boolean)"

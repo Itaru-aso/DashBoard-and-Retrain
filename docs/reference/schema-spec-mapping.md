@@ -30,7 +30,8 @@
 
 ## メトリクス対応
 
-- **monochro（本検査・分母）**＝`camera_model = 'camera1_image'`（`camera2_image` は color）。
+- **monochro（本検査・分母）**＝`camera_model` がモノクロカメラの機種コード
+  （開発用ダミー値 `camera1_image`／実機コード `CA-HL04MX`）。color は `camera2_image`／`CA-H500CX`。
 - **AI 判定（judge）**＝`judgment_result`（**0:OK / 1:NG**。ネイティブ列）。
 - **正解（ground truth）**＝注釈から導出: `image_id` → `annotation_item.item_id` → `dataset_category_item.on_class`。
   集約規則: **`on_class='1'` が1つでもあれば正解NG／注釈ありで全て `'0'` なら正解OK／注釈なしは正解なし**。
@@ -38,8 +39,8 @@
 - **注釈なし画像**は虚報率/見逃し率の判定から**外す**（その日 注釈ありが0件なら両率は **NULL**）。
 
 ### 件数（集計単位＝JST日 × フルタプル × 号機）
-> **規約**: 3指標とも**分子は全カメラ**（monochro＋color 両方を数える）・**分母は monochro 件数**（camera1_image）。原典 `calculate_ngrate_KPI.md` 準拠。
-- `monochro_count` = COUNT(`camera_model='camera1_image'`)
+> **規約**: 3指標とも**分子は全カメラ**（monochro＋color 両方を数える）・**分母は monochro 件数**（`camera1_image`／`CA-HL04MX`）。原典 `calculate_ngrate_KPI.md` 準拠。
+- `monochro_count` = COUNT(`camera_model IN ('camera1_image', 'CA-HL04MX')`)
 - `ng_count`       = COUNT(`judgment_result=1`)（全カメラ）
 - `fp_num`（虚報） = COUNT(`judgment_result=1` AND 正解=OK)
 - `miss_num`（見逃し）= COUNT(`judgment_result=0` AND 正解=NG)
@@ -59,7 +60,7 @@ SELECT
   ib.extra_info->>'colorNo' AS color_no, ib.extra_info->>'size' AS size,
   ib.extra_info->>'chain'  AS chain,    ib.extra_info->>'tape' AS tape,
   ib.unit AS unit,
-  COUNT(*) FILTER (WHERE ib.camera_model='camera1_image')          AS monochro_count,
+  COUNT(*) FILTER (WHERE ib.camera_model IN ('camera1_image', 'CA-HL04MX')) AS monochro_count,
   COUNT(*) FILTER (WHERE ib.judgment_result=1)                     AS ng_count,
   COUNT(*) FILTER (WHERE ib.judgment_result=1 AND ans.correct='0') AS fp_num,
   COUNT(*) FILTER (WHERE ib.judgment_result=0 AND ans.correct='1') AS miss_num,

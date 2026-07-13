@@ -7,6 +7,7 @@ app_db 代役の `annotation.image_base` をキーセット（カーソル (insp
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import datetime
 
 import pytest
@@ -28,7 +29,7 @@ def _insert(
             "VALUES (:id, :ts, :unit, 'camera1_image', 0, CAST(:extra AS jsonb))"
         ),
         {
-            "id": image_id,
+            "id": uuid.UUID(int=image_id),
             "ts": ts,
             "unit": unit,
             "extra": json.dumps({"colorNo": color, "size": "05", "chain": "CZT8", "tape": ""}),
@@ -53,7 +54,7 @@ def test_read_details_period_and_order(_seeded: Session) -> None:
 
     repo = InspectionDetailRepository(_seeded)
     page = repo.read_details(datetime(2026, 7, 1), datetime(2026, 7, 3), limit=50)
-    assert [r.image_id for r in page.rows] == [1, 2, 3, 4]  # (ts, image_id) 昇順
+    assert [r.image_id.int for r in page.rows] == [1, 2, 3, 4]  # (ts, image_id) 昇順
     assert page.next_cursor is None
 
 
@@ -63,13 +64,13 @@ def test_read_details_keyset_pagination(_seeded: Session) -> None:
 
     repo = InspectionDetailRepository(_seeded)
     first = repo.read_details(datetime(2026, 7, 1), datetime(2026, 7, 3), limit=2)
-    assert [r.image_id for r in first.rows] == [1, 2]
+    assert [r.image_id.int for r in first.rows] == [1, 2]
     assert first.next_cursor is not None
 
     second = repo.read_details(
         datetime(2026, 7, 1), datetime(2026, 7, 3), limit=2, cursor=first.next_cursor
     )
-    assert [r.image_id for r in second.rows] == [3, 4]
+    assert [r.image_id.int for r in second.rows] == [3, 4]
     assert second.next_cursor is None
 
 
@@ -81,7 +82,7 @@ def test_read_details_filters_unit_and_color(_seeded: Session) -> None:
     by_unit = repo.read_details(
         datetime(2026, 7, 1), datetime(2026, 7, 3), unit_ids=["1"], limit=50
     )
-    assert [r.image_id for r in by_unit.rows] == [1, 3, 4]
+    assert [r.image_id.int for r in by_unit.rows] == [1, 3, 4]
 
     by_color = repo.read_details(
         datetime(2026, 7, 1),
@@ -92,5 +93,5 @@ def test_read_details_filters_unit_and_color(_seeded: Session) -> None:
         tape="",
         limit=50,
     )
-    assert [r.image_id for r in by_color.rows] == [3]
+    assert [r.image_id.int for r in by_color.rows] == [3]
     assert by_color.rows[0].color_no == "777"

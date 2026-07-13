@@ -7,6 +7,7 @@ schema-spec-mapping の主要3テーブル（image_base / annotation_item / data
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 
 import pytest
@@ -21,19 +22,21 @@ def test_external_models_readable_via_inspection(inspection_session: Session) ->
     from src.models.external.dataset_category_item import DatasetCategoryItem
     from src.models.external.image_base import ImageBase
 
+    image_id = uuid.UUID(int=1)
     inspection_session.execute(
         text(
             "INSERT INTO annotation.image_base "
             "(image_id, inspect_timestamp, unit, camera_model, judgment_result, extra_info) "
-            "VALUES (1, :ts, '1', 'camera1_image', 0, '{}')"
+            "VALUES (:id, :ts, '1', 'camera1_image', 0, '{}')"
         ),
-        {"ts": datetime(2026, 7, 1, 10, 0, 0)},
+        {"id": image_id, "ts": datetime(2026, 7, 1, 10, 0, 0)},
     )
     inspection_session.execute(
         text(
             "INSERT INTO annotation.annotation_item (image_id, dataset_id, item_id, use_flg) "
-            "VALUES (1, 1, 10, true)"
-        )
+            "VALUES (:id, 1, 10, true)"
+        ),
+        {"id": image_id},
     )
     inspection_session.execute(
         text(
@@ -43,12 +46,12 @@ def test_external_models_readable_via_inspection(inspection_session: Session) ->
     )
     inspection_session.flush()
 
-    image = inspection_session.get(ImageBase, 1)
+    image = inspection_session.get(ImageBase, image_id)
     assert image is not None
     assert image.camera_model == "camera1_image"
 
     ann = inspection_session.scalars(
-        select(AnnotationItem).where(AnnotationItem.image_id == 1)
+        select(AnnotationItem).where(AnnotationItem.image_id == image_id)
     ).one()
     assert ann.item_id == 10
     assert ann.use_flg is True

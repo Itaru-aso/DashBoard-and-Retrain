@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import date, datetime
 
 import pytest
@@ -54,7 +55,7 @@ def _insert_image(
             "VALUES (:id, :ts, :unit, :cam, :jr, CAST(:extra AS jsonb))"
         ),
         {
-            "id": image_id,
+            "id": uuid.UUID(int=image_id),
             "ts": datetime(day.year, day.month, day.day, 10, 0, 0),
             "unit": unit,
             "cam": camera,
@@ -70,7 +71,7 @@ def _annotate(session: Session, image_id: int, item_id: int, use_flg: bool = Tru
             "INSERT INTO annotation.annotation_item (image_id, dataset_id, item_id, use_flg) "
             "VALUES (:img, 1, :it, :uf)"
         ),
-        {"img": image_id, "it": item_id, "uf": use_flg},
+        {"img": uuid.UUID(int=image_id), "it": item_id, "uf": use_flg},
     )
 
 
@@ -114,6 +115,35 @@ def test_aggregate_day_counts_are_correct(inspection_session: Session, db_sessio
     assert r.fp_num == 2  # img2,img4（judgment=1 かつ 正解OK）
     assert r.miss_num == 1  # img3（judgment=0 かつ 正解NG）
     assert r.annotated_count == 5  # img1,2,3,4,6（img5 は正解なし）
+
+
+@pytest.mark.integration
+def test_aggregate_day_counts_real_camera_model_code(
+    inspection_session: Session, db_session: Session
+) -> None:
+    """monochro 判定は実機カメラコード（`CA-HL04MX`）でも成立する（開発用ダミー値と併用）。"""
+    from src.repositories.daily_metrics_repository import DailyMetricsRepository
+    from src.services.aggregation_service import AggregationService
+
+    _seed_categories(inspection_session)
+    # img1: 実機モノクロコードで NG, 正解 OK => 虚報(fp)
+    _insert_image(inspection_session, 1, D1, "CA-HL04MX", 1)
+    _annotate(inspection_session, 1, _ITEM_OK)
+    # img2: 実機カラーコードで NG, 正解 OK => monochro には非算入
+    _insert_image(inspection_session, 2, D1, "CA-H500CX", 1)
+    _annotate(inspection_session, 2, _ITEM_OK)
+    inspection_session.flush()
+
+    repo = DailyMetricsRepository(db_session)
+    service = AggregationService(inspection_session, repo)
+    service.aggregate_day(D1)
+
+    rows = repo.read(D1, D1)
+    assert len(rows) == 1
+    r = rows[0]
+    assert r.monochro_count == 1  # img1（CA-HL04MX）のみ
+    assert r.ng_count == 2  # img1,2（全カメラ）
+    assert r.fp_num == 2  # img1,2（judgment=1 かつ 正解OK・全カメラ算入）
 
 
 @pytest.mark.integration

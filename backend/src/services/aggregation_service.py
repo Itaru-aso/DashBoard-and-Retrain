@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from src.config import settings
@@ -24,7 +24,10 @@ from src.repositories.daily_metrics_repository import (
 
 # app_db 集計クエリ（1日パーティション）。正解は image_id 単位に MAX(on_class) で集約
 # （'1'が1つでもNG／全'0'でOK／無ければ NULL・use_flg では絞らない）。
-# 分子=全カメラ／分母=monochro(camera1_image)。フルタプル・号機は NULL を空文字へ寄せる。
+# 分子=全カメラ／分母=monochro。monochro はカメラ機種コードで判定
+# （開発用ダミー値 camera1_image・実機コード CA-HL04MX）。フルタプル・号機は NULL を空文字へ寄せる。
+_MONOCHRO_CAMERA_MODELS = ("camera1_image", "CA-HL04MX")
+
 _AGG_QUERY = text("""
 WITH ann AS (
   SELECT ai.image_id, MAX(dci.on_class) AS correct
@@ -43,7 +46,7 @@ SELECT
   COALESCE(ib.extra_info->>'chain', '')   AS chain,
   COALESCE(ib.extra_info->>'tape', '')    AS tape,
   COALESCE(ib.unit, '')                   AS unit,
-  COUNT(*) FILTER (WHERE ib.camera_model = 'camera1_image')          AS monochro_count,
+  COUNT(*) FILTER (WHERE ib.camera_model IN :monochro_models)        AS monochro_count,
   COUNT(*) FILTER (WHERE ib.judgment_result = 1)                     AS ng_count,
   COUNT(*) FILTER (WHERE ib.judgment_result = 1 AND a.correct = '0') AS fp_num,
   COUNT(*) FILTER (WHERE ib.judgment_result = 0 AND a.correct = '1') AS miss_num,
@@ -52,7 +55,7 @@ FROM annotation.image_base ib
 LEFT JOIN ann a ON a.image_id = ib.image_id
 WHERE ib.inspect_timestamp >= :d AND ib.inspect_timestamp < :d1
 GROUP BY 1, 2, 3, 4, 5
-""")
+""").bindparams(bindparam("monochro_models", expanding=True))
 
 
 class AggregationService:
@@ -65,7 +68,8 @@ class AggregationService:
     def aggregate_day(self, jst_date: date) -> None:
         """対象 JST 日の app_db を集計し、ver2 へ upsert する（冪等）。"""
         next_day = jst_date + timedelta(days=1)
-        result = self._inspection.execute(_AGG_QUERY, {"d": jst_date, "d1": next_day}).mappings()
+        params = {"d": jst_date, "d1": next_day, "monochro_models": _MONOCHRO_CAMERA_MODELS}
+        result = self._inspection.execute(_AGG_QUERY, params).mappings()
         rows = [
             DailyMetricRow(
                 color_no=m["color_no"],
