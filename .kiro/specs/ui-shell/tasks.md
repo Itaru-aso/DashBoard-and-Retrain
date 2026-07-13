@@ -37,7 +37,7 @@
   - テスト（Vitest + Testing Library）: 各ルートでの active 表示、設定の開閉、自動展開。
   - Refs: UI-R1 ／ commit: `feat(ui-shell): add Sidebar component with settings submenu`
 
-- [ ] **4. `AppLayout` とルーティング変更**
+- [x] **4. `AppLayout` とルーティング変更**
   - `frontend/src/layouts/AppLayout.tsx` + `AppLayout.module.css`。`App.tsx` を変更し、`Home` を削除、
     `/` → `/dashboard` リダイレクトを追加、既存ルートを `AppLayout` にネスト。
   - テスト: `AppLayout.test.tsx`（ヘッダー・6ナビ項目の描画）、`App.test.tsx` 更新
