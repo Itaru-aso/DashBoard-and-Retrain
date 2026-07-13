@@ -71,14 +71,25 @@
   - 全テスト・`black`/`flake8`/`mypy`、front の `tsc --noEmit`/`eslint`/`vitest` をグリーンに。カバレッジ 80% 以上。
   - commit: `chore(dashboard): satisfy verification gate`
 
+- [ ] **8. フロント: 画面デザイン刷新（`ui-shell` 準拠・見た目のみ）**
+  - `design.md`「画面デザイン刷新」節に従い `Dashboard.tsx` を作り直す。
+    - フィルタバー・KPIサマリーカード・3チャート（検査数日別／NG率推移／虚報率・見逃し率）・明細一覧を
+      `ui-shell` のデザイントークン・CSS Modules でダーク基調に統一。
+    - チャートは既存の `recharts` のみ使用（新規ライブラリ追加なし）。
+    - フィルタ入力（自由入力）・明細一覧のロジック・API呼び出しは無変更。
+  - テスト（Vitest + Testing Library）: 既存テストを維持しつつ、虚報率・見逃し率チャートの閾値重ね描き
+    （`metric=false_alarm_rate`/`metric=miss_rate` の呼び出し）を追加検証。
+  - 代替検証: `npm run dev`（バックエンド接続）で実データ表示を目視確認。
+  - Refs: R2, R3, R4 ／ commit: `feat(dashboard): restyle dashboard screen with ui-shell design`
+
 ---
 
 ## トレーサビリティ (Requirements ↔ Tasks)
 
 - R1（フィルタ）→ 2, 4, 5, 6
-- R2（推移）→ 2, 3, 5, 6
-- R3（閾値重ね描き）→ 3, 5, 6
-- R4（集計表・明細／キーセット）→ 2, 5, 6
+- R2（推移）→ 2, 3, 5, 6, 8
+- R3（閾値重ね描き）→ 3, 5, 6, 8
+- R4（集計表・明細／キーセット）→ 2, 5, 6, 8
 - R5（対象範囲・KPI ゲート）→ 3
 - R6（read-only・認証）→ 4, 5
 - R7（性能・オンザフライ）→ 1, 2, 5
