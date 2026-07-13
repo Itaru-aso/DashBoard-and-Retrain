@@ -60,15 +60,25 @@
   - 全テスト・`black`/`flake8`/`mypy`、front の `tsc`/`eslint`/`vitest` をグリーンに。カバレッジ 80% 以上。
   - commit: `chore(edge): satisfy verification gate`
 
+- [x] **9. フロント: 画面デザイン刷新（`ui-shell` 準拠・見た目のみ）**
+  - モックアップ（`Shisui Dashboard (standalone).html`）を参照し `EdgePc.tsx` をダーク基調に作り直す。
+    モックアップは「名前/稼働状態/IPアドレス」のみのカード並べだが、登録フォーム・有効フラグ切替・
+    接続テスト・削除の既存機能はすべて残し、一覧を表からカードグリッド（2列）に変更するのみとする
+    （ポート・FTP確認結果・操作ボタンはカード内に表示。brainstormingで確認済み）。
+  - テスト: 既存5テストのうち、一覧表示アサーションを `role="cell"` からカード構造の `getByText` に更新。
+    それ以外（登録・有効フラグ切替・削除・接続テスト）は無変更で通ることを確認。
+  - 代替検証: `npm run dev`（バックエンド接続）で目視確認。
+  - Refs: E-R1, E-R4, E-R5 ／ commit: `feat(edge): restyle edge PC management screen with ui-shell design`
+
 ---
 
 ## トレーサビリティ (Requirements ↔ Tasks)
 
-- E-R1（登録・管理）→ 1, 3, 4, 5, 6
+- E-R1（登録・管理）→ 1, 3, 4, 5, 6, 9
 - E-R2（平文・任意パスワード）→ 1
 - E-R3（全台配信の参照点）→ 4（`find_enabled`。実配信は `モデル再学習` 側）
-- E-R4（一覧・参照）→ 4, 6, 7
-- E-R5（接続テスト・任意）→ 5, 6, 7
+- E-R4（一覧・参照）→ 4, 6, 7, 9
+- E-R5（接続テスト・任意）→ 5, 6, 7, 9
 - E-R6（認証）→ 6
 
 > 後追い: 接続情報の具体列（タスク1。ver1 設定受領後に確定）。

@@ -42,7 +42,7 @@ describe("EdgePc", () => {
   it("一覧を表示する", async () => {
     renderWithClient(<EdgePc />);
     expect(await screen.findByText("検査PC_1")).toBeInTheDocument();
-    expect(screen.getByRole("cell", { name: "169.254.93.171" })).toBeInTheDocument();
+    expect(screen.getByText("169.254.93.171")).toBeInTheDocument();
   });
 
   it("登録 API を呼ぶ", async () => {
