@@ -44,13 +44,13 @@
     （`/` アクセスで `/dashboard` にリダイレクトされ `Dashboard` が描画される）。
   - Refs: UI-R2, UI-R5 ／ commit: `feat(ui-shell): add AppLayout and wire routing`
 
-- [ ] **5. 既存ページとの結合確認**
+- [x] **5. 既存ページとの結合確認**
   - 既存の各ページ `*.test.tsx`（`Dashboard.test.tsx` 等）が無変更で通ることを確認。
   - `npm run dev` で6画面すべて（`/dashboard`, `/tasks`, `/colors`, `/thresholds`, `/edge-pcs`,
     `/retraining`）を開き、サイドバーのアクティブ表示・設定展開が正しいことを目視確認（代替検証）。
   - Refs: UI-R1, UI-R5 ／ commit 不要（確認のみ。問題があればタスク2-4に戻って修正）
 
-- [ ] **6. 仕上げ: 検証ゲート確認**
+- [x] **6. 仕上げ: 検証ゲート確認**
   - `tsc --noEmit`・`eslint .`・`vitest run` をグリーンに。
   - commit: `chore(ui-shell): satisfy verification gate`
 
