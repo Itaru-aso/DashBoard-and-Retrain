@@ -82,6 +82,16 @@
   - 全テスト・`black`/`flake8`/`mypy`、front の `tsc`/`eslint`/`vitest` をグリーンに。カバレッジ 80% 以上。
   - commit: `chore(color): satisfy verification gate`
 
+- [x] **11. フロント: 画面デザイン刷新（`ui-shell` 準拠・見た目のみ）**
+  - モックアップ（`Shisui Dashboard (standalone).html`）を参照し `ColorMaster.tsx` をダーク基調に作り直す。
+    サマリーカード（登録色数・未実施・量産検証・実生産の件数、既存データからフロント集計）、
+    色番のクライアント検索、色見本を実RGB値によるスウォッチ表示に変更。
+    「色番を追加」モーダル（手動登録）・色名・表示色hex・直近NG率列は登録APIやデータが無いため**スコープ外**。
+  - テスト（Vitest + Testing Library）: サマリーカードの件数表示、色番検索での絞り込みを追加検証。
+    既存の一覧/取り込み/色見本編集テストは無変更で通ることを確認。
+  - 代替検証: `npm run dev`（バックエンド接続）で目視確認。
+  - Refs: C-R5 ／ commit: `feat(color): restyle color master screen with ui-shell design`
+
 ---
 
 ## トレーサビリティ (Requirements ↔ Tasks)
@@ -90,7 +100,7 @@
 - C-R2（ライフサイクル状態・一方向）→ 4, 6
 - C-R3（量産検証へ自動遷移）→ 6, 7
 - C-R4（実生産へ自動昇格・日次固定基準）→ 6, 7
-- C-R5（一覧・参照）→ 3, 4, 8, 9
+- C-R5（一覧・参照）→ 3, 4, 8, 9, 11
 - C-R6（認証）→ 8
 
 > 後追い: 一覧ファイルの列マッピング（タスク5。サンプル受領後に確定）。

@@ -34,6 +34,8 @@ const COLOR = {
   updated_at: "2026-07-01T00:00:00Z",
 };
 
+const COLOR2 = { ...COLOR, id: 4, color_no: "002", status: "量産検証" };
+
 describe("ColorMaster", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -65,5 +67,27 @@ describe("ColorMaster", () => {
     await waitFor(() =>
       expect(api.updateSample).toHaveBeenCalledWith(3, { rgb_r: 99 }),
     );
+  });
+
+  it("ステータス別の件数をサマリーカードに表示する", async () => {
+    (api.listColors as Mock).mockResolvedValue([COLOR, COLOR2]);
+    renderWithClient(<ColorMaster />);
+    await screen.findByText("001");
+
+    expect(screen.getByTestId("summary-total")).toHaveTextContent("2");
+    expect(screen.getByTestId("summary-未実施")).toHaveTextContent("1");
+    expect(screen.getByTestId("summary-量産検証")).toHaveTextContent("1");
+  });
+
+  it("色番検索で一覧を絞り込む", async () => {
+    (api.listColors as Mock).mockResolvedValue([COLOR, COLOR2]);
+    renderWithClient(<ColorMaster />);
+    await screen.findByText("001");
+    expect(screen.getByText("002")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("色番検索"), { target: { value: "002" } });
+
+    expect(screen.queryByText("001")).not.toBeInTheDocument();
+    expect(screen.getByText("002")).toBeInTheDocument();
   });
 });
