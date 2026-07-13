@@ -31,7 +31,7 @@
   - テスト（Vitest + Testing Library）: ロゴ・アプリ名・プレースホルダーテキストが描画されること。
   - Refs: UI-R3 ／ commit: `feat(ui-shell): add Header component`
 
-- [ ] **3. `Sidebar` コンポーネント**
+- [x] **3. `Sidebar` コンポーネント**
   - `frontend/src/components/Sidebar.tsx` + `Sidebar.module.css`。3項目＋「設定」展開で3項目、
     アクティブ判定、設定配下ルートでの自動展開。
   - テスト（Vitest + Testing Library）: 各ルートでの active 表示、設定の開閉、自動展開。

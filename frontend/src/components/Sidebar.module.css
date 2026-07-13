@@ -1,0 +1,91 @@
+.sidebar {
+  width: 228px;
+  flex: none;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-panel-sidebar);
+  backdrop-filter: blur(10px);
+  padding: 15px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+}
+
+.sectionLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  color: var(--color-text-muted);
+  padding: 4px 10px 8px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: 13px;
+  background: transparent;
+}
+
+.navItemIcon {
+  color: var(--color-text-muted);
+  display: flex;
+}
+
+.navItemActive {
+  background: rgba(34, 211, 238, 0.1);
+  color: var(--color-text-primary);
+}
+
+.navItemActive .navItemIcon {
+  color: var(--color-accent-cyan);
+}
+
+.settingsToggle {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+.settingsSubmenu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 14px;
+  margin-left: 8px;
+  border-left: 1px solid var(--color-border);
+}
+
+.subNavItem {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: 12.5px;
+}
+
+.subNavItemActive {
+  background: rgba(34, 211, 238, 0.1);
+  color: var(--color-text-primary);
+}
+
+.spacer {
+  flex: 1;
+}
