@@ -18,7 +18,7 @@
 
 ## タスク (Tasks)
 
-- [ ] **1. デザイントークン・フォント基盤**
+- [x] **1. デザイントークン・フォント基盤**
   - `frontend/src/styles/tokens.css`（CSS変数・body既定スタイル）、`frontend/src/styles/fonts.css`
     （JetBrains Mono 400/500/600 の `@font-face`）を追加。`frontend/public/fonts/` に woff2 を配置。
     `main.tsx` で読み込む。
