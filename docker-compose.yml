@@ -23,8 +23,8 @@ services:
       retries: 10
 
   inspection-db:
-    # 業者検査 DB（app_db）の代役。実 dump は scripts/ で投入する（後日）。
-    image: postgres:14
+    # 業者検査 DB（app_db）の代役。dump（PG17 製）と揃えるため postgres:17 を使用。
+    image: postgres:17
     environment:
       POSTGRES_USER: readonly
       POSTGRES_PASSWORD: readonly
