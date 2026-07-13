@@ -1,0 +1,130 @@
+.infoBanner {
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: rgba(34, 211, 238, 0.06);
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.infoDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-accent-cyan);
+  flex: none;
+}
+
+.panel {
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--color-border);
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--color-text-secondary);
+}
+
+.field select,
+.field input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--color-text-primary);
+  padding: 8px 10px;
+  border-radius: 9px;
+  font-size: 13px;
+  color-scheme: dark;
+}
+
+.valueInput {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  width: 92px;
+  text-align: right;
+}
+
+.submitButton {
+  padding: 9px 22px;
+  border-radius: 9px;
+  background: linear-gradient(120deg, var(--color-accent-cyan), #38bdf8);
+  border: none;
+  color: #04141a;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.error {
+  color: #fda4af;
+  background: rgba(244, 63, 94, 0.1);
+  border: 1px solid rgba(244, 63, 94, 0.28);
+  padding: 9px 12px;
+  border-radius: 9px;
+  font-size: 11.5px;
+  margin-bottom: 16px;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  padding: 9px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(16, 22, 34, 0.7);
+}
+
+.table td {
+  padding: 8px 12px;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.disableButton {
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 11.5px;
+  cursor: pointer;
+  font-family: inherit;
+}

@@ -69,13 +69,22 @@
     カバレッジ 80% 以上を確認。
   - commit: `chore(threshold): satisfy verification gate`
 
+- [x] **9. フロント: 画面デザイン刷新（`ui-shell` 準拠・見た目のみ）**
+  - モックアップ（`Shisui Dashboard (standalone).html`）を参照し `ThresholdManagement.tsx` をダーク基調に
+    作り直す（情報バナー・登録フォームのパネル化・一覧表のダーク化）。
+    モックアップは「3指標カードのinline編集＋一括保存」だが、色別スコープ・有効開始日時による履歴管理
+    （R2/R3）を持つ現行機能はそのまま残す（brainstormingで確認済み。モックアップ構造への簡略化は不採用）。
+  - テスト: 既存3テストが無変更で通ることを確認。
+  - 代替検証: `npm run dev`（バックエンド接続）で目視確認。
+  - Refs: R1, R2, R5 ／ commit: `feat(threshold): restyle threshold management screen with ui-shell design`
+
 ---
 
 ## トレーサビリティ (Requirements ↔ Tasks)
 
-- R1（登録・検証）→ 1, 3, 4, 6
-- R2（更新・無効化・履歴）→ 5, 6, 7
+- R1（登録・検証）→ 1, 3, 4, 6, 9
+- R2（更新・無効化・履歴）→ 5, 6, 7, 9
 - R3（有効閾値解決・優先順位・境界）→ 4, 5
 - R4（下流提供）→ 5, 6
-- R5（一覧）→ 4, 6, 7
+- R5（一覧）→ 4, 6, 7, 9
 - R6（認証・記録）→ 3, 6
