@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { OverlayPoint, TrendPoint } from "@/api/dashboardApi";
 
-import { buildChartSeries } from "./dashboardChart";
+import { buildChartSeries, buildFaMissChartSeries } from "./dashboardChart";
 
 const trend = (jst_date: string, ng_rate: number | null): TrendPoint => ({
   jst_date,
@@ -31,5 +31,26 @@ describe("buildChartSeries", () => {
     expect(rows[0].false_alarm_rate).toBeNull();
     expect(rows[0].miss_rate).toBeNull();
     expect(rows[0].ng_rate).toBe(0.25);
+  });
+});
+
+describe("buildFaMissChartSeries", () => {
+  it("虚報率・見逃し率それぞれの閾値系列を日付で突き合わせる", () => {
+    const trends: TrendPoint[] = [trend("2026-07-01", 0.1)];
+    const faOverlay: OverlayPoint[] = [{ jst_date: "2026-07-01", value_pct: 2.5 }];
+    const missOverlay: OverlayPoint[] = [{ jst_date: "2026-07-01", value_pct: 1 }];
+
+    const rows = buildFaMissChartSeries(trends, faOverlay, missOverlay);
+    expect(rows[0].false_alarm_rate).toBe(0.1);
+    expect(rows[0].miss_rate).toBe(0.1);
+    expect(rows[0].fa_threshold).toBe(2.5);
+    expect(rows[0].miss_threshold).toBe(1);
+  });
+
+  it("閾値なしの日は欠損（null）のまま保持する", () => {
+    const trends: TrendPoint[] = [trend("2026-07-01", 0.1)];
+    const rows = buildFaMissChartSeries(trends, [], []);
+    expect(rows[0].fa_threshold).toBeNull();
+    expect(rows[0].miss_threshold).toBeNull();
   });
 });

@@ -71,7 +71,7 @@
   - 全テスト・`black`/`flake8`/`mypy`、front の `tsc --noEmit`/`eslint`/`vitest` をグリーンに。カバレッジ 80% 以上。
   - commit: `chore(dashboard): satisfy verification gate`
 
-- [ ] **8. フロント: 画面デザイン刷新（`ui-shell` 準拠・見た目のみ）**
+- [x] **8. フロント: 画面デザイン刷新（`ui-shell` 準拠・見た目のみ）**
   - `design.md`「画面デザイン刷新」節に従い `Dashboard.tsx` を作り直す。
     - フィルタバー・KPIサマリーカード・3チャート（検査数日別／NG率推移／虚報率・見逃し率）・明細一覧を
       `ui-shell` のデザイントークン・CSS Modules でダーク基調に統一。

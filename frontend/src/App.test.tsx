@@ -14,7 +14,9 @@ vi.mock("recharts", () => {
   const Passthrough = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
   return {
     LineChart: Passthrough,
+    BarChart: Passthrough,
     Line: () => null,
+    Bar: () => null,
     XAxis: () => null,
     YAxis: () => null,
     CartesianGrid: () => null,

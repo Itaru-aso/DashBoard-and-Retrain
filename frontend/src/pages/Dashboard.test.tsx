@@ -15,7 +15,9 @@ vi.mock("recharts", () => {
   const Passthrough = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
   return {
     LineChart: Passthrough,
+    BarChart: Passthrough,
     Line: () => null,
+    Bar: () => null,
     XAxis: () => null,
     YAxis: () => null,
     CartesianGrid: () => null,
@@ -97,5 +99,25 @@ describe("Dashboard", () => {
     const call = (api.fetchSummary as Mock).mock.calls[0][0];
     expect(call.from).toBe("2026-07-01");
     expect(call.to).toBe("2026-07-03");
+  });
+
+  it("色・サイズ・チェーンが一意に定まる場合、NG率/虚報率/見逃し率それぞれの閾値を取得する", async () => {
+    renderWithClient(<Dashboard />);
+
+    await screen.findByRole("option", { name: "1" });
+
+    fireEvent.change(screen.getByLabelText("開始日"), { target: { value: "2026-07-01" } });
+    fireEvent.change(screen.getByLabelText("終了日"), { target: { value: "2026-07-03" } });
+    fireEvent.change(screen.getByLabelText("色番号"), { target: { value: "501" } });
+    fireEvent.change(screen.getByLabelText("サイズ"), { target: { value: "05" } });
+    fireEvent.change(screen.getByLabelText("チェーン"), { target: { value: "CZT8" } });
+    fireEvent.click(screen.getByRole("button", { name: "適用" }));
+
+    await waitFor(() => {
+      const metrics = (api.fetchThresholdOverlay as Mock).mock.calls.map((c) => c[0].metric);
+      expect(metrics).toContain("ng_rate");
+      expect(metrics).toContain("false_alarm_rate");
+      expect(metrics).toContain("miss_rate");
+    });
   });
 });
