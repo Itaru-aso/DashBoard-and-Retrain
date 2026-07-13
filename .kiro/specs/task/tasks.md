@@ -81,13 +81,24 @@
   - 全テスト・`black`/`flake8`/`mypy`、front の `tsc --noEmit`/`eslint`/`vitest` をグリーンに。カバレッジ 80% 以上。
   - commit: `chore(task): satisfy verification gate`
 
+- [x] **11. フロント: 画面デザイン刷新（`ui-shell` 準拠・見た目のみ）**
+  - モックアップ（`Shisui Dashboard (standalone).html`）を参照し `TaskList.tsx` をダーク基調に作り直す。
+    表列は 検査日(JST)／種別／サイズ／チェーン／テープ／色番／検知値/閾値／ステータス／操作／コメント
+    （モックアップにない「テープ」列は R4 のフルタプル不変条件に合わせて残す）。
+    状態フィルタは既存の `<select>` を維持（ドロップダウンのまま見た目のみ変更）。
+    サマリーカード（OPENタスク数等）は今回スコープ外（brainstormingで確認済み）。
+  - API呼び出し・状態遷移・コメント追記のロジックは無変更。
+  - テスト: 既存テストが無変更で通ることを確認。
+  - 代替検証: `npm run dev`（バックエンド接続）で目視確認。
+  - Refs: R3, R4, R5 ／ commit: `feat(task): restyle task list screen with ui-shell design`
+
 ---
 
 ## トレーサビリティ (Requirements ↔ Tasks)
 
 - R1（逸脱判定・日次スケジュール）→ 5, 6, 7
 - R2（自動起票・upsert・重複防止）→ 1, 4, 6
-- R3（状態遷移・前進のみ）→ 3, 4, 8
-- R4（コメント＝再発防止策含む）→ 4, 8, 9
-- R5（一覧）→ 3, 4, 8, 9
+- R3（状態遷移・前進のみ）→ 3, 4, 8, 11
+- R4（コメント＝再発防止策含む）→ 4, 8, 9, 11
+- R5（一覧）→ 3, 4, 8, 9, 11
 - R6（認証・日時保持）→ 1, 8
