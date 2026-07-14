@@ -59,11 +59,16 @@ class TrainingConfig:
         return os.path.join(self.model_dir, color_no, mode, f"{color_no}_{mode}_model.onnx")
 
     def build_command(self, color_no: str) -> list[str]:
-        """起動コマンドを組み立てる（色番は文字列で渡す）。"""
+        """起動コマンドを組み立てる（色番は文字列で渡す）。
+
+        `common.model_dir` は `TRAINING_MODEL_DIR`（env）を単一の正として明示上書きする
+        （config.yaml 側の既定値との二重管理・ズレを防ぐ）。
+        """
         return [
             self.python_executable,
             self.entry,
             f"common.target_color={color_no}",
+            f"common.model_dir={self.model_dir}",
             *self.base_overrides,
         ]
 
