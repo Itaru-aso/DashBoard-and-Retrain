@@ -59,6 +59,33 @@ describe("ColorMaster", () => {
     await waitFor(() => expect(api.importColors).toHaveBeenCalledTimes(1));
   });
 
+  it("取り込み成功時に結果件数を表示する", async () => {
+    (api.importColors as Mock).mockResolvedValue({
+      created: 3,
+      updated: 2,
+      skipped: 1,
+      errors: [],
+    });
+    renderWithClient(<ColorMaster />);
+    await screen.findByText("001");
+    const file = new File(["x"], "colors.xlsx");
+    fireEvent.change(screen.getByLabelText("ファイル"), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "取り込み" }));
+    expect(await screen.findByText(/作成: 3件/)).toBeInTheDocument();
+    expect(screen.getByText(/更新: 2件/)).toBeInTheDocument();
+    expect(screen.getByText(/スキップ: 1件/)).toBeInTheDocument();
+  });
+
+  it("取り込み失敗時にエラーメッセージを表示する", async () => {
+    (api.importColors as Mock).mockRejectedValue(new Error("ヘッダ行がありません"));
+    renderWithClient(<ColorMaster />);
+    await screen.findByText("001");
+    const file = new File(["x"], "colors.xlsx");
+    fireEvent.change(screen.getByLabelText("ファイル"), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "取り込み" }));
+    expect(await screen.findByText("ヘッダ行がありません")).toBeInTheDocument();
+  });
+
   it("色見本の保存 API を呼ぶ", async () => {
     renderWithClient(<ColorMaster />);
     await screen.findByText("001");

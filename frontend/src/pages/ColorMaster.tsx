@@ -130,6 +130,17 @@ export default function ColorMaster() {
         </button>
       </div>
 
+      {importColors.isError && (
+        <p className={styles.importError}>{(importColors.error as Error).message}</p>
+      )}
+      {importColors.isSuccess && (
+        <p className={styles.importResult}>
+          作成: {importColors.data.created}件 / 更新: {importColors.data.updated}件 / スキップ:{" "}
+          {importColors.data.skipped}件
+          {importColors.data.errors.length > 0 && ` / エラー: ${importColors.data.errors.join(", ")}`}
+        </p>
+      )}
+
       {isLoading ? (
         <p>読み込み中...</p>
       ) : (
