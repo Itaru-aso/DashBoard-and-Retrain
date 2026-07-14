@@ -61,6 +61,24 @@ describe("EdgePc", () => {
     );
   });
 
+  it("username/password を含めて登録 API を呼ぶ", async () => {
+    renderWithClient(<EdgePc />);
+    await screen.findByText("検査PC_1");
+    fireEvent.change(screen.getByLabelText("名称"), { target: { value: "検査PC_2" } });
+    fireEvent.change(screen.getByLabelText("ホスト"), { target: { value: "10.0.0.2" } });
+    fireEvent.change(screen.getByLabelText("ユーザー名"), { target: { value: "ykk\\shisui_PJ" } });
+    fireEvent.change(screen.getByLabelText("パスワード"), { target: { value: "secret123" } });
+    fireEvent.click(screen.getByRole("button", { name: "登録" }));
+    await waitFor(() =>
+      expect(api.createEdgePc).toHaveBeenCalledWith({
+        name: "検査PC_2",
+        host: "10.0.0.2",
+        username: "ykk\\shisui_PJ",
+        password: "secret123",
+      }),
+    );
+  });
+
   it("有効フラグ切替の更新 API を呼ぶ", async () => {
     renderWithClient(<EdgePc />);
     await screen.findByText("検査PC_1");

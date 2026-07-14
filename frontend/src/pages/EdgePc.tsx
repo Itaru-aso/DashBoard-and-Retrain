@@ -60,15 +60,27 @@ export default function EdgePc() {
   const [name, setName] = useState("");
   const [host, setHost] = useState("");
   const [port, setPort] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
 
   const submit = () => {
     if (!name || !host) return;
-    const payload: { name: string; host: string; model_port?: number } = { name, host };
+    const payload: {
+      name: string;
+      host: string;
+      model_port?: number;
+      username?: string;
+      password?: string;
+    } = { name, host };
     if (port) payload.model_port = Number(port);
+    if (username) payload.username = username;
+    if (password) payload.password = password;
     create.mutate(payload);
     setName("");
     setHost("");
     setPort("");
+    setUsername("");
+    setPassword("");
   };
 
   return (
@@ -91,6 +103,23 @@ export default function EdgePc() {
             type="number"
             value={port}
             onChange={(e) => setPort(e.target.value)}
+          />
+        </div>
+        <div className={styles.field}>
+          <label htmlFor="edge-username">ユーザー名</label>
+          <input
+            id="edge-username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+        </div>
+        <div className={styles.field}>
+          <label htmlFor="edge-password">パスワード</label>
+          <input
+            id="edge-password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
           />
         </div>
         <button type="button" className={styles.submitButton} onClick={submit}>
