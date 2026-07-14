@@ -22,20 +22,22 @@
 実装調査で判明した、DB と外部 config/env が二重管理・記載不一致になっている箇所。**修正はせず記録のみ**
 （`edge_pc` は `.kiro/specs/edge/design.md` で意図的にスコープを絞った確定事項であり、安易に「直す」対象ではない）。
 
-### 1. `edge_pc`（DB） ↔ `common.ftp_hosts`（config.yaml）
-
-`edge_pc` と `config.yaml` の `common.ftp_hosts` は `host`/`username`/`password`/`model_port` が意味的に重複する。
+### 1. `edge_pc`（DB） ↔ `common.ftp_hosts`（config.yaml）— 対応済み
 
 - **アプリ（ver2）とエッジPC間の通信はモデル配信（upload）のみ**。画像収集（download）は本アプリのスコープ外
-  （別機能が担う）。したがって `ftp_hosts` の3ポート項目（`monochro_port`／`color_port`／`model_port`）のうち、
+  （別機能が担う）。`ftp_hosts` の3ポート項目（`monochro_port`／`color_port`／`model_port`）のうち、
   `edge_pc`・アプリの「エッジPC管理」画面と対応するのは **`model_port` のみ**。
-- **ver2 起動フローでは `ftp_hosts` は使われない**。`training_service.build_command()` が常に
+- **ver2 起動フローでは `ftp_hosts` の実 I/O は発生しない**。`training_service.build_command()` が常に
   `common.skip_download=true` `common.skip_upload=true` を付与するため、`pipline.py` は FTP ダウンロード・
   アップロードの両方をスキップする（`.kiro/specs/retraining/tasks.md` タスク0）。モデル配信は ver2 の
-  `deployment_service` が `edge_pc.model_port` を使って ftplib で直接行う。
-- `ftp_hosts` が実際に読まれるのは、`pipline.py` を **skip フラグ無しで単独実行**した場合のみ。
-  この場合に限り、DB の `edge_pc` 登録内容と `config.yaml` の静的リストがズレるリスクがある
-  （例: ver2 UI で検査PCを追加しても `config.yaml` には反映されない）。
+  `deployment_service` が `edge_pc.model_port` を使って ftplib で直接行う（`config.yaml` の `ftp_hosts` は
+  この経路では一切参照されない＝ **`edge_pc` が実配信の唯一の正**）。
+- ただし `TrainingPipeline.__init__` は `MultiFTPManager(cfg)` を**無条件に構築**し、その `__init__` が
+  `cfg.common.ftp_hosts` をリスト内包表記でイテレートする（`pipline.py:399-404`）。これは skip フラグの
+  判定より前に実行されるため、**`ftp_hosts` キーを削除すると ver2 経由の現行フローも起動時にクラッシュする**。
+- **対応**: 単独実行が現在は行われていないことを確認した上で、`ftp_hosts` を**空リスト `[]`** に変更
+  （キー自体は残す）。`MultiFTPManager` の構築は空リストのまま成功し、`download_images()`/`upload_onnx_model()`
+  は skip フラグにより呼ばれないため無害。実接続情報（ホスト・パスワード等）は config.yaml から削除された。
 - `edge_pc` が `monochro_port`／`color_port`／`local_root` を持たないのは**仕様上の意図的な決定**
   （`.kiro/specs/edge/design.md:35`, `requirements.md:38`）。画像収集用ポートは別機能のスコープ外という
   確定事項であり、「対応が取れていない」ではない。

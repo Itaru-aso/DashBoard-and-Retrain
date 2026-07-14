@@ -27,14 +27,9 @@ common:
   imagenet_train_path: D:/0032011/ILSVRC/Data/CLS-LOC/train
   ftp_common:
     local_root: ./annotated_data
-  ftp_hosts:
-    - name: 検査PC_1
-      host: 169.254.93.171
-      username: ykk\shisui_PJ
-      password: shisui@09
-      monochro_port: 2121
-      color_port: 2122
-      model_port: 2123
+  # ver2 経由の実行では skip_download/skip_upload=true により未使用（MultiFTPManager の構築のみ発生・実I/Oなし）。
+  # 実接続情報は ver2 DB の edge_pc テーブルが正（deployment_service が model_port で配信）。
+  ftp_hosts: []
   pipeline_mode: train
   parallel_train: true
   mode: 'color'
