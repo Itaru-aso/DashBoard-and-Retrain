@@ -98,6 +98,25 @@ def test_get_inspection_db_can_read(bound_database: ModuleType) -> None:
 
 
 @pytest.mark.integration
+def test_ver2_connect_args_set_statement_timeout(ver2_db_url: str) -> None:
+    """ver2_engine と同じ connect_args で接続すると、statement_timeout・
+    idle_in_transaction_session_timeout が既定値（30秒）で設定される（詰まったトランザクションが
+    永久に残らないようにする再発防止策）。
+    """
+    from src import database
+
+    engine = create_engine(ver2_db_url, connect_args=database.VER2_CONNECT_ARGS)
+    try:
+        with engine.connect() as conn:
+            assert conn.execute(text("SHOW statement_timeout")).scalar_one() == "30s"
+            assert (
+                conn.execute(text("SHOW idle_in_transaction_session_timeout")).scalar_one() == "30s"
+            )
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.integration
 def test_inspection_db_down_raises_operational_error() -> None:
     """業者 DB 到達不能時は OperationalError を捕捉できる（アプリは落とさない）。"""
     from src import database

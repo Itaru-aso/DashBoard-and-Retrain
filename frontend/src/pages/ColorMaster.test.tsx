@@ -39,7 +39,11 @@ const COLOR2 = { ...COLOR, id: 4, color_no: "002", status: "量産検証" };
 describe("ColorMaster", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (api.listColors as Mock).mockResolvedValue([COLOR]);
+    (api.listColors as Mock).mockResolvedValue({ items: [COLOR], limit: 50, offset: 0 });
+    (api.getColorSummary as Mock).mockResolvedValue({
+      total: 1,
+      by_status: { 未実施: 1 },
+    });
     (api.importColors as Mock).mockResolvedValue({ created: 1, updated: 0, skipped: 0, errors: [] });
     (api.updateSample as Mock).mockResolvedValue(COLOR);
   });
@@ -96,8 +100,12 @@ describe("ColorMaster", () => {
     );
   });
 
-  it("ステータス別の件数をサマリーカードに表示する", async () => {
-    (api.listColors as Mock).mockResolvedValue([COLOR, COLOR2]);
+  it("ステータス別の件数をサマリーカードに表示する（summary API 由来）", async () => {
+    (api.getColorSummary as Mock).mockResolvedValue({
+      total: 2,
+      by_status: { 未実施: 1, 量産検証: 1 },
+    });
+    (api.listColors as Mock).mockResolvedValue({ items: [COLOR, COLOR2], limit: 50, offset: 0 });
     renderWithClient(<ColorMaster />);
     await screen.findByText("001");
 
@@ -107,7 +115,7 @@ describe("ColorMaster", () => {
   });
 
   it("色番検索で一覧を絞り込む", async () => {
-    (api.listColors as Mock).mockResolvedValue([COLOR, COLOR2]);
+    (api.listColors as Mock).mockResolvedValue({ items: [COLOR, COLOR2], limit: 50, offset: 0 });
     renderWithClient(<ColorMaster />);
     await screen.findByText("001");
     expect(screen.getByText("002")).toBeInTheDocument();
@@ -116,5 +124,48 @@ describe("ColorMaster", () => {
 
     expect(screen.queryByText("001")).not.toBeInTheDocument();
     expect(screen.getByText("002")).toBeInTheDocument();
+  });
+
+  it("次へ/前へでページを送る", async () => {
+    (api.listColors as Mock).mockResolvedValue({
+      items: Array.from({ length: 50 }, (_, i) => ({ ...COLOR, id: i, color_no: String(i) })),
+      limit: 50,
+      offset: 0,
+    });
+    renderWithClient(<ColorMaster />);
+    await screen.findByRole("cell", { name: "0" });
+
+    fireEvent.click(screen.getByRole("button", { name: "次へ" }));
+    await waitFor(() =>
+      expect(api.listColors).toHaveBeenCalledWith({ limit: 50, offset: 50 }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "前へ" }));
+    await waitFor(() =>
+      expect(api.listColors).toHaveBeenCalledWith({ limit: 50, offset: 0 }),
+    );
+  });
+
+  it("ステータス変更でページを先頭に戻す", async () => {
+    (api.listColors as Mock).mockResolvedValue({
+      items: Array.from({ length: 50 }, (_, i) => ({ ...COLOR, id: i, color_no: String(i) })),
+      limit: 50,
+      offset: 0,
+    });
+    renderWithClient(<ColorMaster />);
+    await screen.findByRole("cell", { name: "0" });
+    fireEvent.click(screen.getByRole("button", { name: "次へ" }));
+    await waitFor(() =>
+      expect(api.listColors).toHaveBeenCalledWith({ limit: 50, offset: 50 }),
+    );
+
+    fireEvent.change(screen.getByLabelText("ステータス"), { target: { value: "量産検証" } });
+    await waitFor(() =>
+      expect(api.listColors).toHaveBeenCalledWith({
+        status: "量産検証",
+        limit: 50,
+        offset: 0,
+      }),
+    );
   });
 });

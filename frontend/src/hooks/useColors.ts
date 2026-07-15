@@ -2,13 +2,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   type ColorSampleUpdatePayload,
+  getColorSummary,
   importColors,
   listColors,
   updateSample,
 } from "@/api/colorApi";
 
-export function useColors(filter: { status?: string }) {
+export function useColors(filter: { status?: string; limit?: number; offset?: number }) {
   return useQuery({ queryKey: ["colors", filter], queryFn: () => listColors(filter) });
+}
+
+export function useColorSummary() {
+  return useQuery({ queryKey: ["colors", "summary"], queryFn: getColorSummary });
 }
 
 export function useImportColors() {

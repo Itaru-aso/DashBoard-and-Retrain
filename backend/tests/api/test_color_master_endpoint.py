@@ -50,10 +50,44 @@ def test_list_and_get(client: TestClient, db_session: Session) -> None:
     color = _seed(db_session)
     listed = client.get("/api/colors", params={"status": "未実施"})
     assert listed.status_code == 200
-    assert len(listed.json()) == 1
+    body = listed.json()
+    assert len(body["items"]) == 1
+    assert body["limit"] == 50
+    assert body["offset"] == 0
     got = client.get(f"/api/colors/{color.id}")
     assert got.status_code == 200
     assert got.json()["color_no"] == "001"
+
+
+@pytest.mark.api
+def test_list_paginates(client: TestClient, db_session: Session) -> None:
+    from src.repositories.color_master_repository import ColorMasterRepository
+
+    repo = ColorMasterRepository(db_session)
+    for i in range(3):
+        repo.create(**{**TUPLE, "color_no": f"00{i}"}, rgb_r=1)
+
+    page = client.get("/api/colors", params={"limit": 2, "offset": 0})
+    assert page.status_code == 200
+    body = page.json()
+    assert [c["color_no"] for c in body["items"]] == ["000", "001"]
+    assert body["limit"] == 2
+    assert body["offset"] == 0
+
+
+@pytest.mark.api
+def test_summary(client: TestClient, db_session: Session) -> None:
+    color = _seed(db_session)
+    from src.repositories.color_master_repository import ColorMasterRepository
+
+    ColorMasterRepository(db_session).set_status(color.id, "量産検証")
+    ColorMasterRepository(db_session).create(**{**TUPLE, "color_no": "002"}, rgb_r=1)
+
+    res = client.get("/api/colors/summary")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["total"] == 2
+    assert body["by_status"] == {"未実施": 1, "量産検証": 1}
 
 
 @pytest.mark.api

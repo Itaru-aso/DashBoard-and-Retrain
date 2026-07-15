@@ -44,6 +44,13 @@ class ImportResult(BaseModel):
     errors: list[str]
 
 
+class ColorSummary(BaseModel):
+    """状態別の件数サマリー（一覧の全件取得を避けるための軽量集計）。"""
+
+    total: int
+    by_status: dict[str, int]
+
+
 class ColorOut(BaseModel):
     """色マスター出力。"""
 
@@ -65,3 +72,11 @@ class ColorOut(BaseModel):
     production_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class ColorListResponse(BaseModel):
+    """色一覧（ページング付き）。"""
+
+    items: list[ColorOut]
+    limit: int
+    offset: int

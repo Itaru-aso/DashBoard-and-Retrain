@@ -35,8 +35,26 @@ export interface ColorSampleUpdatePayload {
   lab_b?: number;
 }
 
-export async function listColors(params: { status?: string } = {}): Promise<Color[]> {
-  const { data } = await apiClient.get<Color[]>("/colors", { params });
+export interface ColorListResponse {
+  items: Color[];
+  limit: number;
+  offset: number;
+}
+
+export interface ColorSummary {
+  total: number;
+  by_status: Record<string, number>;
+}
+
+export async function listColors(
+  params: { status?: string; limit?: number; offset?: number } = {},
+): Promise<ColorListResponse> {
+  const { data } = await apiClient.get<ColorListResponse>("/colors", { params });
+  return data;
+}
+
+export async function getColorSummary(): Promise<ColorSummary> {
+  const { data } = await apiClient.get<ColorSummary>("/colors/summary");
   return data;
 }
 

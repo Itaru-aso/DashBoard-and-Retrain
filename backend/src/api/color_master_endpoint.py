@@ -8,13 +8,19 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from src.api.security import require_auth
 from src.database import get_db
 from src.repositories.color_master_repository import ColorMasterRepository
-from src.schemas.color_master import ColorOut, ColorSampleUpdate, ImportResult
+from src.schemas.color_master import (
+    ColorListResponse,
+    ColorOut,
+    ColorSampleUpdate,
+    ColorSummary,
+    ImportResult,
+)
 from src.services.color_import_service import ColorImportService
 from src.services.color_lifecycle_service import ColorLifecycleService
 
@@ -25,7 +31,7 @@ router = APIRouter(
 )
 
 
-@router.get("", response_model=list[ColorOut])
+@router.get("", response_model=ColorListResponse)
 def list_colors(
     db: Annotated[Session, Depends(get_db)],
     status: str | None = None,
@@ -33,12 +39,29 @@ def list_colors(
     size: str | None = None,
     chain: str | None = None,
     tape: str | None = None,
-) -> list[ColorOut]:
-    """色を絞り込んで一覧する。"""
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ColorListResponse:
+    """色を絞り込んで一覧する（ページング）。"""
     rows = ColorMasterRepository(db).list(
-        status=status, color_no=color_no, size=size, chain=chain, tape=tape
+        status=status,
+        color_no=color_no,
+        size=size,
+        chain=chain,
+        tape=tape,
+        limit=limit,
+        offset=offset,
     )
-    return [ColorOut.model_validate(r) for r in rows]
+    return ColorListResponse(
+        items=[ColorOut.model_validate(r) for r in rows], limit=limit, offset=offset
+    )
+
+
+@router.get("/summary", response_model=ColorSummary)
+def get_summary(db: Annotated[Session, Depends(get_db)]) -> ColorSummary:
+    """状態別の件数サマリー（全件取得せずに集計のみ返す軽量版）。"""
+    by_status = ColorMasterRepository(db).count_by_status()
+    return ColorSummary(total=sum(by_status.values()), by_status=by_status)
 
 
 @router.post("/import", response_model=ImportResult)

@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 
 import type { Color } from "@/api/colorApi";
-import { useColors, useImportColors, useUpdateSample } from "@/hooks/useColors";
+import { useColors, useColorSummary, useImportColors, useUpdateSample } from "@/hooks/useColors";
 
 import styles from "./ColorMaster.module.css";
+
+const PAGE_SIZE = 50;
 
 function swatchColor(color: Color): string {
   if (color.rgb_r === null || color.rgb_g === null || color.rgb_b === null) {
@@ -48,26 +50,30 @@ function ColorRow({ color }: { color: Color }) {
 export default function ColorMaster() {
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
-  const filter = status ? { status } : {};
-  const { data: colors = [], isLoading } = useColors(filter);
-  const { data: allColors = [] } = useColors({});
+  const [offset, setOffset] = useState(0);
+  const filter = { ...(status ? { status } : {}), limit: PAGE_SIZE, offset };
+  const { data, isLoading } = useColors(filter);
+  const colors = useMemo(() => data?.items ?? [], [data]);
+  const { data: summaryData } = useColorSummary();
   const importColors = useImportColors();
   const [file, setFile] = useState<File | null>(null);
 
-  const summary = useMemo(
-    () => ({
-      total: allColors.length,
-      未実施: allColors.filter((c) => c.status === "未実施").length,
-      量産検証: allColors.filter((c) => c.status === "量産検証").length,
-      実生産: allColors.filter((c) => c.status === "実生産").length,
-    }),
-    [allColors],
-  );
+  const summary = {
+    total: summaryData?.total ?? 0,
+    未実施: summaryData?.by_status["未実施"] ?? 0,
+    量産検証: summaryData?.by_status["量産検証"] ?? 0,
+    実生産: summaryData?.by_status["実生産"] ?? 0,
+  };
 
   const visibleColors = useMemo(
     () => (search ? colors.filter((c) => c.color_no.includes(search)) : colors),
     [colors, search],
   );
+
+  const changeStatus = (value: string) => {
+    setStatus(value);
+    setOffset(0);
+  };
 
   return (
     <section>
@@ -102,7 +108,7 @@ export default function ColorMaster() {
 
       <div className={styles.toolbar}>
         <label htmlFor="status-filter">ステータス</label>
-        <select id="status-filter" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <select id="status-filter" value={status} onChange={(e) => changeStatus(e.target.value)}>
           <option value="">すべて</option>
           <option value="未実施">未実施</option>
           <option value="量産検証">量産検証</option>
@@ -162,6 +168,26 @@ export default function ColorMaster() {
           </table>
         </div>
       )}
+
+      <div className={styles.pager}>
+        <button
+          type="button"
+          className={styles.actionButton}
+          disabled={offset === 0}
+          onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+        >
+          前へ
+        </button>
+        <span className={styles.pagerLabel}>{offset + 1}〜{offset + colors.length}件</span>
+        <button
+          type="button"
+          className={styles.actionButton}
+          disabled={colors.length < PAGE_SIZE}
+          onClick={() => setOffset(offset + PAGE_SIZE)}
+        >
+          次へ
+        </button>
+      </div>
     </section>
   );
 }

@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.models.color_master import ColorMaster
@@ -153,8 +153,10 @@ class ColorMasterRepository:
         size: str | None = None,
         chain: str | None = None,
         tape: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[ColorMaster]:
-        """絞り込んで一覧する。"""
+        """絞り込んで一覧する。`limit` 未指定（既定 None）は全件返す（内部利用と互換）。"""
         stmt = select(ColorMaster)
         if status is not None:
             stmt = stmt.where(ColorMaster.status == status)
@@ -167,8 +169,15 @@ class ColorMasterRepository:
         if tape is not None:
             stmt = stmt.where(ColorMaster.tape == tape)
         stmt = stmt.order_by(ColorMaster.color_no, ColorMaster.size)
+        if limit is not None:
+            stmt = stmt.offset(offset).limit(limit)
         return list(self._session.scalars(stmt))
 
     def find_by_status(self, status: str) -> Sequence[ColorMaster]:
-        """指定 status の色を返す。"""
+        """指定 status の色を全件返す（ライフサイクル評価が全件を処理するため limit をかけない）。"""
         return self.list(status=status)
+
+    def count_by_status(self) -> dict[str, int]:
+        """状態別の件数を返す（0件の状態はキーを含まない。サマリー表示用の軽量集計）。"""
+        stmt = select(ColorMaster.status, func.count()).group_by(ColorMaster.status)
+        return dict(self._session.execute(stmt).tuples().all())

@@ -72,3 +72,31 @@ def test_list_and_find_by_status(db_session: Session) -> None:
     assert len(repo.list()) == 2
     assert len(repo.list(status="未実施")) == 1
     assert len(repo.find_by_status("量産検証")) == 1
+
+
+@pytest.mark.integration
+def test_list_with_limit_and_offset(db_session: Session) -> None:
+    """limit/offset 指定時はページング、未指定（既定 None）時は全件（内部呼び出し互換）。"""
+    from src.repositories.color_master_repository import ColorMasterRepository
+
+    repo = ColorMasterRepository(db_session)
+    for i in range(3):
+        repo.create(**{**TUPLE, "color_no": f"00{i}"}, **SAMPLE)
+
+    assert len(repo.list()) == 3  # limit 未指定は全件（find_by_status 等の内部利用と互換）
+    page1 = repo.list(limit=2, offset=0)
+    page2 = repo.list(limit=2, offset=2)
+    assert [c.color_no for c in page1] == ["000", "001"]
+    assert [c.color_no for c in page2] == ["002"]
+
+
+@pytest.mark.integration
+def test_count_by_status(db_session: Session) -> None:
+    from src.repositories.color_master_repository import ColorMasterRepository
+
+    repo = ColorMasterRepository(db_session)
+    c1 = repo.create(**TUPLE, **SAMPLE)
+    repo.create(**{**TUPLE, "color_no": "002"}, **SAMPLE)
+    repo.set_status(c1.id, "量産検証")
+
+    assert repo.count_by_status() == {"未実施": 1, "量産検証": 1}

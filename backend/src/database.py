@@ -27,8 +27,14 @@ class Base(DeclarativeBase):
     """ver2 DB（自前・読み書き）の declarative base（Alembic 管理対象）。"""
 
 
-# ver2 DB（自前・読み書き）。
-ver2_engine: Engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+# ver2 DB（自前・読み書き）。応答書き込みブロック等で接続が停止した際に、トランザクション/
+# コネクションが無期限に残留しないよう statement_timeout・idle_in_transaction_session_timeout を設定する。
+VER2_CONNECT_ARGS = {
+    "options": "-c statement_timeout=30000 -c idle_in_transaction_session_timeout=30000"
+}
+ver2_engine: Engine = create_engine(
+    settings.DATABASE_URL, pool_pre_ping=True, connect_args=VER2_CONNECT_ARGS
+)
 SessionLocal = sessionmaker(
     bind=ver2_engine, autoflush=False, autocommit=False, expire_on_commit=False
 )
