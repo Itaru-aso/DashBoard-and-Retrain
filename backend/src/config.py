@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     TRAINING_DIR: str = ""
     TRAINING_MODEL_DIR: str = ""
     TRAINING_PYTHON: str = "python"
+    # 未設定（既定 空）なら config.yaml 自身の imagenet_train_path を使う（上書きしない）。
+    TRAINING_IMAGENET_PATH: str = ""
+    # 未設定（既定 空）なら config.yaml 自身のパス一式（pretraining_dir 等）を使う。
+    TRAINING_DATA_ROOT: str = ""
 
     # --- 日次集計ジョブ（アプリ内スケジューラ） ---
     AGG_RUN_TIME: str = "02:00"

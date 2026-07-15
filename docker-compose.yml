@@ -47,6 +47,22 @@ services:
       ENVIRONMENT: development
       LOG_LEVEL: INFO
       ENABLE_BASIC_AUTH: "false"
+      # 再学習（training/ 連携）。Dockerfile で構築した training 専用 venv を指す。
+      TRAINING_DIR: /training
+      TRAINING_MODEL_DIR: /training/6_model
+      TRAINING_PYTHON: /training-venv/bin/python
+      # config.yaml 自身は Windows 絶対パス（ローカル実行用）のため、Docker ではこちらで上書きする。
+      TRAINING_IMAGENET_PATH: /imagenet/train
+      # pretraining_dir/dataset_path/backup_dir/download_dir/pool_base/staging_dir/
+      # monochro.raw_image_root を一括で /retrain_app_CW/<同名> に上書きする。
+      TRAINING_DATA_ROOT: /retrain_app_CW
+    volumes:
+      # training/ はバインドマウント（config.yaml・pipline.py 等の編集を再ビルド無しで反映）。
+      - ./training:/training
+      # ImageNet（EfficientAD の penalty set）。イメージには焼き込まず読み取り専用で参照する。
+      - D:/0032011/ILSVRC/Data/CLS-LOC/train:/imagenet/train:ro
+      # 既存の学習データ（1_download 等）一式。書き込みも発生するため rw。
+      - D:/0032011/GitLab/shisui/retrain_app_CW:/retrain_app_CW
     ports:
       - "8000:8000"
     depends_on:
@@ -54,15 +70,14 @@ services:
         condition: service_healthy
       inspection-db:
         condition: service_healthy
-    # GPU/CUDA と再学習(torch) は後日追補（GPU 確定後）。ベースイメージを nvidia/cuda 系へ
-    # 差し替えたうえで、下記のように GPU を渡す（ver1 compose 実績）。
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
+    # GPU（開発機: RTX A5000 ×2・cu121）。本番 Blackwell 移行時も device 指定は変更不要。
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   pgadmin:
     image: dpage/pgadmin4:latest

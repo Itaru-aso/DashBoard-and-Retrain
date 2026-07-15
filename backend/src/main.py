@@ -120,6 +120,8 @@ def _init_retraining_services() -> "TrainingService":
             training_dir=config.settings.TRAINING_DIR,
             model_dir=config.settings.TRAINING_MODEL_DIR,
             python_executable=config.settings.TRAINING_PYTHON,
+            imagenet_train_path=config.settings.TRAINING_IMAGENET_PATH,
+            data_root=config.settings.TRAINING_DATA_ROOT,
         ),
         on_completed=make_auto_deploy_hook(deployment_service),
     )

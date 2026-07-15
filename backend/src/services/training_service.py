@@ -45,6 +45,13 @@ class TrainingConfig:
     model_dir: str  # ONNX 出力ルート（例 training_dir/6_model）
     python_executable: str = "python"  # 学習環境の python（cu128 入りイメージ）
     entry: str = "pipline.py"
+    # 空文字（既定）なら上書きしない（config.yaml 自身の imagenet_train_path を使う）。
+    # 環境（ローカル Windows / Docker）でパス表現が異なる場合のみ env 側で明示指定する。
+    imagenet_train_path: str = ""
+    # 空文字（既定）なら上書きしない。設定時は 0_pretraining/1_download/2_staging/3_pool/
+    # 4_dataset/backup を {data_root}/<同名サブディレクトリ> で一括上書きする
+    # （config.yaml 自身がローカル Windows 用の絶対パスを指す場合、Docker 側で差し替える用途）。
+    data_root: str = ""
     # 既定で付与する dotlist override（収集スコープ外・配信分離・mlflow 無効）
     base_overrides: tuple[str, ...] = (
         "common.pipeline_mode=train",
@@ -62,13 +69,32 @@ class TrainingConfig:
         """起動コマンドを組み立てる（色番は文字列で渡す）。
 
         `common.model_dir` は `TRAINING_MODEL_DIR`（env）を単一の正として明示上書きする
-        （config.yaml 側の既定値との二重管理・ズレを防ぐ）。
+        （config.yaml 側の既定値との二重管理・ズレを防ぐ）。`imagenet_train_path`・データ用
+        ディレクトリ一式（`data_root` 設定時）は env が設定されている場合のみ上書きする
+        （ローカル Windows と Docker でパス表現が異なるため）。
         """
+        overrides = [
+            f"common.target_color={color_no}",
+            f"common.model_dir={self.model_dir}",
+        ]
+        if self.imagenet_train_path:
+            overrides.append(f"common.imagenet_train_path={self.imagenet_train_path}")
+        if self.data_root:
+            overrides.extend(
+                [
+                    f"common.pretraining_dir={self.data_root}/0_pretraining",
+                    f"common.dataset_path={self.data_root}/4_dataset",
+                    f"common.backup_dir={self.data_root}/backup",
+                    f"common.download_dir={self.data_root}/1_download",
+                    f"common.pool_base={self.data_root}/3_pool",
+                    f"common.staging_dir={self.data_root}/2_staging",
+                    f"monochro.raw_image_root={self.data_root}/1_download",
+                ]
+            )
         return [
             self.python_executable,
             self.entry,
-            f"common.target_color={color_no}",
-            f"common.model_dir={self.model_dir}",
+            *overrides,
             *self.base_overrides,
         ]
 

@@ -96,6 +96,54 @@ def _cfg(tmp_path: object):
     )
 
 
+@pytest.mark.integration
+def test_build_command_omits_imagenet_override_when_unset(tmp_path: object) -> None:
+    cfg = _cfg(tmp_path)
+    cmd = cfg.build_command("501")
+    assert not any(c.startswith("common.imagenet_train_path=") for c in cmd)
+
+
+@pytest.mark.integration
+def test_build_command_omits_data_root_overrides_when_unset(tmp_path: object) -> None:
+    cfg = _cfg(tmp_path)
+    cmd = cfg.build_command("501")
+    assert not any(c.startswith("common.pool_base=") for c in cmd)
+
+
+@pytest.mark.integration
+def test_build_command_overrides_data_paths_when_data_root_set(tmp_path: object) -> None:
+    from src.services.training_service import TrainingConfig
+
+    cfg = TrainingConfig(
+        training_dir=str(tmp_path),
+        model_dir=os.path.join(str(tmp_path), "6_model"),
+        python_executable="python",
+        data_root="/retrain_app_CW",
+    )
+    cmd = cfg.build_command("501")
+    assert "common.pretraining_dir=/retrain_app_CW/0_pretraining" in cmd
+    assert "common.dataset_path=/retrain_app_CW/4_dataset" in cmd
+    assert "common.backup_dir=/retrain_app_CW/backup" in cmd
+    assert "common.download_dir=/retrain_app_CW/1_download" in cmd
+    assert "common.pool_base=/retrain_app_CW/3_pool" in cmd
+    assert "common.staging_dir=/retrain_app_CW/2_staging" in cmd
+    assert "monochro.raw_image_root=/retrain_app_CW/1_download" in cmd
+
+
+@pytest.mark.integration
+def test_build_command_overrides_imagenet_when_set(tmp_path: object) -> None:
+    from src.services.training_service import TrainingConfig
+
+    cfg = TrainingConfig(
+        training_dir=str(tmp_path),
+        model_dir=os.path.join(str(tmp_path), "6_model"),
+        python_executable="python",
+        imagenet_train_path="/imagenet/train",
+    )
+    cmd = cfg.build_command("501")
+    assert "common.imagenet_train_path=/imagenet/train" in cmd
+
+
 def _make_onnx(cfg: object, color: str) -> None:
     for mode in ("monochro", "color"):
         p = cfg.onnx_path(color, mode)  # type: ignore[attr-defined]
