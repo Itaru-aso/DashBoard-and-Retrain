@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 
 import { isTerminal, type Job, type JobStatus } from "@/api/retrainingApi";
-import type { Phase, ProgressState } from "@/pages/retrainingProgress";
 import {
   useCancelJob,
   useCreateJob,
@@ -9,6 +8,7 @@ import {
   useJobProgress,
   useJobs,
 } from "@/hooks/useRetraining";
+import type { Phase, ProgressState } from "@/pages/retrainingProgress";
 
 import styles from "./Retraining.module.css";
 
