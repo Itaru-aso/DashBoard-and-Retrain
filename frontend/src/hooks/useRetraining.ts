@@ -14,6 +14,7 @@ import {
   listJobs,
   progressWsUrl,
 } from "@/api/retrainingApi";
+import { classifyLine, type Phase, type ProgressState } from "@/pages/retrainingProgress";
 
 const KEY = {
   jobs: (status?: JobStatus) => ["retraining", "jobs", status ?? "all"] as const,
@@ -75,18 +76,46 @@ export type WsState = "connecting" | "open" | "closed";
  */
 export function useJobProgress(jobId: number | null, active: boolean) {
   const [lines, setLines] = useState<string[]>([]);
+  const [importantLines, setImportantLines] = useState<string[]>([]);
+  const [progress, setProgress] = useState<Partial<Record<Phase, ProgressState>>>({});
   const [state, setState] = useState<WsState>("closed");
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     if (jobId == null || !active) return;
     setLines([]);
+    setImportantLines([]);
+    setProgress({});
     setState("connecting");
     const ws = new WebSocket(progressWsUrl(jobId));
     wsRef.current = ws;
 
     ws.onopen = () => setState("open");
-    ws.onmessage = (ev) => setLines((prev) => [...prev, String(ev.data)]);
+    ws.onmessage = (ev) => {
+      const raw = String(ev.data);
+      setLines((prev) => [...prev, raw]);
+
+      const classified = classifyLine(raw);
+      if (classified.kind === "progress") {
+        // phase不明の進捗行は表示先が定まらないため無視する（並列学習では常に
+        // [monochro]/[color] 接頭辞が付くため実運用では発生しない）。
+        if (classified.phase) {
+          const phase = classified.phase;
+          setProgress((prev) => ({
+            ...prev,
+            [phase]: {
+              percent: classified.percent,
+              current: classified.current,
+              total: classified.total,
+              loss: classified.loss,
+              eta: classified.eta,
+            },
+          }));
+        }
+      } else {
+        setImportantLines((prev) => [...prev, raw]);
+      }
+    };
     ws.onerror = () => setState("closed");
     ws.onclose = () => setState("closed");
 
@@ -97,5 +126,5 @@ export function useJobProgress(jobId: number | null, active: boolean) {
     };
   }, [jobId, active]);
 
-  return { lines, state };
+  return { lines, importantLines, progress, state };
 }
