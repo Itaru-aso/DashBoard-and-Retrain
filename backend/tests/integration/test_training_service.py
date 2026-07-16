@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 
 import pytest
 from sqlalchemy import text
@@ -28,20 +28,19 @@ def session_factory(ver2_engine: Engine) -> Iterator[Callable[[], Session]]:
 
 
 class _FakeStdout:
-    """行リストを1行ずつ bytes で返す非同期イテレータ。"""
+    """実際の asyncio.StreamReader に裏付けさせる（readline の上限挙動も本物同様に再現）。"""
 
     def __init__(self, lines: list[str]) -> None:
-        self._it = iter(lines)
+        self._reader = asyncio.StreamReader()
+        data = ("\n".join(lines) + "\n").encode("utf-8") if lines else b""
+        self._reader.feed_data(data)
+        self._reader.feed_eof()
 
-    def __aiter__(self) -> "_FakeStdout":
-        return self
+    def __aiter__(self) -> AsyncIterator[bytes]:
+        return self._reader.__aiter__()
 
-    async def __anext__(self) -> bytes:
-        try:
-            line = next(self._it)
-        except StopIteration:
-            raise StopAsyncIteration
-        return (line + "\n").encode("utf-8")
+    async def read(self, n: int = -1) -> bytes:
+        return await self._reader.read(n)
 
 
 class FakeProcess:
@@ -214,6 +213,44 @@ def test_job_completes_when_onnx_and_marker(monkeypatch, tmp_path, session_facto
     lines = asyncio.run(scenario())
     assert any("パイプライン完了" in ln for ln in lines)  # 素通し
     assert any(ln.startswith("[STATUS] COMPLETED") for ln in lines)
+
+
+@pytest.mark.integration
+def test_job_completes_with_long_progress_line_without_newline(
+    monkeypatch, tmp_path, session_factory
+) -> None:
+    """tqdm 進捗のように `\\r` のみで 64KiB を超える1行（`\\n` 無し）が来ても FAILED にならない。
+
+    `readline()`（`readuntil`）ベースだと StreamReader の上限（既定 64KiB）で
+    `ValueError('Separator is not found, and chunk exceed the limit')` になり、
+    実際に学習は完了していても内部エラーとして FAILED 記録されていた。
+    """
+    from src.models.retraining_job import JobStatus
+    from src.services.training_service import TrainingService
+
+    cfg = _cfg(tmp_path)
+    _stub_process_group(monkeypatch)
+    # tqdm の \r 進捗更新を模した、\n を含まない 64KiB 超の1行。
+    progress = "\r".join(f"Current loss: 0.1  : {i}/100000" for i in range(3000))
+    assert len(progress.encode("utf-8")) > 65536
+    _install_fake_subprocess(
+        monkeypatch,
+        lambda cmd, kw: FakeProcess(
+            ["学習開始", progress, "パイプライン完了"],
+            on_wait=lambda: _make_onnx(cfg, "501"),
+        ),
+    )
+
+    async def scenario() -> None:
+        svc = TrainingService(session_factory, cfg)
+        await svc.start()
+        jid = _create_job(session_factory, "501")
+        svc.enqueue(jid)
+        await _drain(svc, jid)
+        await svc.stop()
+        assert _status(session_factory, jid) == JobStatus.COMPLETED.value
+
+    asyncio.run(scenario())
 
 
 @pytest.mark.integration

@@ -24,7 +24,7 @@ import signal
 from collections import deque
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Callable, Iterator
+from typing import AsyncIterator, Callable, Iterator
 
 from sqlalchemy.orm import Session
 
@@ -97,6 +97,34 @@ class TrainingConfig:
             *overrides,
             *self.base_overrides,
         ]
+
+
+async def _iter_stdout_lines(stdout: asyncio.StreamReader) -> AsyncIterator[str]:
+    """subprocess の stdout を `\\r`/`\\n` のどちらでも区切って1行ずつ返す。
+
+    `readline()`（内部で `readuntil(b"\\n")`）は改行が来るまで StreamReader の上限
+    （既定 64KiB）にバッファを溜め込むため、tqdm の進捗表示のように `\\r` のみで
+    延々と上書きされ `\\n` が来ない出力があると `ValueError('Separator is not found,
+    and chunk exceed the limit')` になる。`read(n)` による手動チャンク読み取りに
+    置き換え、`\\r` も区切りとして扱うことで上限に依存せず消費する。
+    """
+    buf = b""
+    while True:
+        chunk = await stdout.read(65536)
+        if not chunk:
+            break
+        buf += chunk
+        while True:
+            idx_n = buf.find(b"\n")
+            idx_r = buf.find(b"\r")
+            candidates = [i for i in (idx_n, idx_r) if i != -1]
+            if not candidates:
+                break
+            idx = min(candidates)
+            raw_line, buf = buf[:idx], buf[idx + 1 :]
+            yield raw_line.decode("utf-8", errors="replace")
+    if buf:
+        yield buf.decode("utf-8", errors="replace")
 
 
 class _ProgressHub:
@@ -286,8 +314,7 @@ class TrainingService:
         assert proc is not None and proc.stdout is not None
 
         try:
-            async for raw in proc.stdout:
-                line = raw.decode("utf-8", errors="replace").rstrip("\n")
+            async for line in _iter_stdout_lines(proc.stdout):
                 if COMPLETION_MARKER in line:
                     saw_completion = True
                 self._hub.publish(job_id, line)  # 素通し
