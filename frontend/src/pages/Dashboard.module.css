@@ -24,7 +24,7 @@
 }
 
 .filterField label {
-  font-size: 10.5px;
+  font-size: var(--font-size-caption);
   font-weight: 600;
   letter-spacing: 0.5px;
   color: var(--color-text-secondary);
@@ -35,20 +35,20 @@
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: var(--color-text-primary);
-  padding: 7px 10px;
+  padding: 9px 12px;
   border-radius: 9px;
-  font-size: 12.5px;
+  font-size: var(--font-size-body);
   font-family: var(--font-mono);
   color-scheme: dark;
 }
 
 .applyButton {
-  padding: 9px 24px;
+  padding: 11px 26px;
   border-radius: 9px;
   background: linear-gradient(120deg, var(--color-accent-cyan), #38bdf8);
   border: none;
   color: #04141a;
-  font-size: 13px;
+  font-size: var(--font-size-body);
   font-weight: 700;
   letter-spacing: 0.5px;
   cursor: pointer;
@@ -72,16 +72,20 @@
 }
 
 .cardLabel {
-  font-size: 11.5px;
+  font-size: var(--font-size-caption);
   color: var(--color-text-secondary);
   font-weight: 500;
 }
 
 .cardValue {
   font-family: var(--font-mono);
-  font-size: 24px;
+  font-size: var(--font-size-kpi);
   font-weight: 700;
   color: var(--color-text-primary);
+}
+
+.cardValueJudgment {
+  font-size: var(--font-size-judgment);
 }
 
 .chartsGrid {
@@ -91,13 +95,13 @@
 }
 
 .panelTitle {
-  font-size: 13.5px;
+  font-size: var(--font-size-heading);
   font-weight: 700;
   color: var(--color-text-primary);
 }
 
 .panelSubtitle {
-  font-size: 11px;
+  font-size: var(--font-size-caption);
   color: var(--color-text-muted);
 }
 
@@ -108,9 +112,9 @@
 }
 
 .recordRow {
-  padding: 8px 12px;
+  padding: 10px 14px;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: var(--font-size-body);
   color: var(--color-text-secondary);
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }

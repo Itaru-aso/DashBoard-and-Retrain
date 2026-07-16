@@ -152,15 +152,21 @@ export default function Dashboard() {
           </div>
           <div className={styles.card}>
             <span className={styles.cardLabel}>NG率</span>
-            <span className={styles.cardValue}>{fmtPct(summary.data.ng_rate)}</span>
+            <span className={`${styles.cardValue} ${styles.cardValueJudgment}`}>
+              {fmtPct(summary.data.ng_rate)}
+            </span>
           </div>
           <div className={styles.card}>
             <span className={styles.cardLabel}>虚報率</span>
-            <span className={styles.cardValue}>{fmtPct(summary.data.false_alarm_rate)}</span>
+            <span className={`${styles.cardValue} ${styles.cardValueJudgment}`}>
+              {fmtPct(summary.data.false_alarm_rate)}
+            </span>
           </div>
           <div className={styles.card}>
             <span className={styles.cardLabel}>見逃し率</span>
-            <span className={styles.cardValue}>{fmtPct(summary.data.miss_rate)}</span>
+            <span className={`${styles.cardValue} ${styles.cardValueJudgment}`}>
+              {fmtPct(summary.data.miss_rate)}
+            </span>
           </div>
         </div>
       ) : (
@@ -172,7 +178,7 @@ export default function Dashboard() {
         <div className={styles.panel}>
           <span className={styles.panelTitle}>検査数（スループット）</span>
           <span className={styles.panelSubtitle}>日別 検査数</span>
-          <BarChart width={480} height={236} data={throughputChartData}>
+          <BarChart width={480} height={260} data={throughputChartData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" />
             <YAxis />
@@ -184,7 +190,7 @@ export default function Dashboard() {
         <div className={styles.panel}>
           <span className={styles.panelTitle}>NG率推移</span>
           <span className={styles.panelSubtitle}>日別 NG率・閾値</span>
-          <LineChart width={480} height={236} data={ngChartData}>
+          <LineChart width={480} height={260} data={ngChartData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" />
             <YAxis />
@@ -199,7 +205,7 @@ export default function Dashboard() {
       <div className={styles.panel}>
         <span className={styles.panelTitle}>虚報率・見逃し率</span>
         <span className={styles.panelSubtitle}>各系列に閾値ライン（破線）を重畳</span>
-        <LineChart width={980} height={248} data={faMissChartData}>
+        <LineChart width={980} height={270} data={faMissChartData}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="date" />
           <YAxis />
@@ -219,7 +225,7 @@ export default function Dashboard() {
 
       <h2>明細</h2>
       <div className={styles.recordList}>
-        <FixedSizeList height={200} width={980} itemCount={recordList.length} itemSize={30}>
+        <FixedSizeList height={240} width={980} itemCount={recordList.length} itemSize={40}>
           {({ index, style }: { index: number; style: React.CSSProperties }) => {
             const r = recordList[index];
             return (
