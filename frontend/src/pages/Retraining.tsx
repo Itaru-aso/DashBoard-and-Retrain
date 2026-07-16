@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { isTerminal, type Job, type JobStatus } from "@/api/retrainingApi";
+import type { Phase, ProgressState } from "@/pages/retrainingProgress";
 import {
   useCancelJob,
   useCreateJob,
@@ -82,9 +83,46 @@ function CreateJobForm() {
   );
 }
 
+const PHASE_LABEL: Record<Phase, string> = { monochro: "モノクロAI", color: "カラーAI" };
+
+function ProgressBar({ phase, state }: { phase: Phase; state?: ProgressState }) {
+  const label = PHASE_LABEL[phase];
+  if (!state) {
+    return (
+      <div className={styles.progressBarRow}>
+        <span className={styles.progressBarLabel}>{label}</span>
+        <span className={styles.progressBarWaiting}>待機中…</span>
+      </div>
+    );
+  }
+  const detail = [
+    `${state.percent}% (${state.current}/${state.total})`,
+    state.loss != null ? `loss=${state.loss}` : null,
+    state.eta ?? null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <div className={styles.progressBarRow}>
+      <span className={styles.progressBarLabel}>{label}</span>
+      <div
+        className={styles.progressBarTrack}
+        role="progressbar"
+        aria-label={`${label}進捗`}
+        aria-valuenow={state.percent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div className={styles.progressBarFill} style={{ width: `${state.percent}%` }} />
+      </div>
+      <span className={styles.progressBarText}>{detail}</span>
+    </div>
+  );
+}
+
 function ProgressPanel({ job }: { job: Job }) {
   const active = !isTerminal(job.status);
-  const { lines, state } = useJobProgress(job.id, active);
+  const { lines, importantLines, progress, state } = useJobProgress(job.id, active);
 
   return (
     <div className={styles.progressCard}>
@@ -98,13 +136,23 @@ function ProgressPanel({ job }: { job: Job }) {
           {active ? (state === "open" ? " 配信中" : " 接続中…") : " 学習は終了しています"}
         </span>
       </div>
+      <div className={styles.progressBars}>
+        <ProgressBar phase="monochro" state={progress.monochro} />
+        <ProgressBar phase="color" state={progress.color} />
+      </div>
       <pre aria-live="polite" aria-label="学習ログ" className={styles.logBox}>
-        {lines.length
-          ? lines.join("\n")
+        {importantLines.length
+          ? importantLines.join("\n")
           : active
             ? "ログ待機中…"
             : "ライブログはありません（終了済み）。"}
       </pre>
+      <details className={styles.rawLogDetails}>
+        <summary>元ログを表示</summary>
+        <pre aria-label="元ログ" className={styles.logBox}>
+          {lines.length ? lines.join("\n") : "ログはありません。"}
+        </pre>
+      </details>
       {job.status === "FAILED" && job.error_message && (
         <p role="alert" className={styles.error}>
           失敗理由: {job.error_message}
