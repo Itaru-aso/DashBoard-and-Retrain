@@ -186,4 +186,53 @@ describe("Retraining 画面", () => {
     expect(await screen.findByText("#7")).toBeInTheDocument();
     expect(screen.getByText("SUCCESS")).toBeInTheDocument();
   });
+
+  it("tqdm進捗行は進捗バーに反映され、学習ログには重要行のみ表示される", async () => {
+    mocked.listJobs.mockResolvedValue({
+      items: [job({ id: 11, status: "RUNNING" })],
+      limit: 50,
+      offset: 0,
+    });
+    render(<Retraining />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "進捗" }));
+    await waitFor(() => expect(FakeWebSocket.instances.length).toBe(1));
+    const ws = FakeWebSocket.instances[0];
+    await waitFor(() => expect(ws.readyState).toBe(1));
+
+    ws.emit("[monochro] 🟢 モノクロAIの学習を開始します...");
+    ws.emit(
+      "[monochro] Current loss: 0.37  :  91%|████████ | 22001/24120 [1:05:02<5:39:04,  9.60s/it]",
+    );
+
+    const bar = await screen.findByRole("progressbar", { name: "モノクロAI進捗" });
+    await waitFor(() => expect(bar).toHaveAttribute("aria-valuenow", "91"));
+
+    const log = screen.getByLabelText("学習ログ");
+    expect(within(log).getByText(/モノクロAIの学習を開始します/)).toBeInTheDocument();
+    expect(within(log).queryByText(/Current loss/)).not.toBeInTheDocument();
+  });
+
+  it("元ログは既定で折りたたまれ、開くと全行（進捗行含む）が見える", async () => {
+    mocked.listJobs.mockResolvedValue({
+      items: [job({ id: 12, status: "RUNNING" })],
+      limit: 50,
+      offset: 0,
+    });
+    render(<Retraining />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "進捗" }));
+    await waitFor(() => expect(FakeWebSocket.instances.length).toBe(1));
+    const ws = FakeWebSocket.instances[0];
+    await waitFor(() => expect(ws.readyState).toBe(1));
+
+    ws.emit(
+      "[color] Current loss: 0.10  :  10%|█ | 100/1000 [00:10<01:30, 10.0it/s]",
+    );
+
+    expect(screen.queryByLabelText("元ログ")).not.toBeVisible();
+    fireEvent.click(screen.getByText("元ログを表示"));
+    await waitFor(() => expect(screen.getByLabelText("元ログ")).toBeVisible());
+    expect(within(screen.getByLabelText("元ログ")).getByText(/Current loss/)).toBeInTheDocument();
+  });
 });
