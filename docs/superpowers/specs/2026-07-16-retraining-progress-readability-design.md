@@ -62,5 +62,7 @@ UIのAI学習画面は `training/pipline.py` の標準出力を `[STATUS]`/`[CMD
 ## スコープ外（既知の制約）
 
 - WS再接続時に配信される直近200行バッファ（`training_service.py` の `_RECENT_LINES`）に重要行が埋もれる可能性は既存の制約であり、本タスクでは対応しない。
+- **直列学習時（`training/pipline.py` が `parallel_train: false` で動く場合）は進捗バーが動作しない既知の制約。** `LogTailer` による `[monochro]`/`[color]` 接頭辞は並列学習（`_spawn_with_gpu_env` で子プロセスに分離した場合）のみ付与される。直列実行では `run_trainer` が親プロセス内でそのまま動くため tqdm 行に接頭辞が付かず、`classifyLine` が `phase` を取り出せずに `useJobProgress` がその進捗行を破棄する（進捗バーは「待機中…」のまま、元ログには残る）。
+  `pipline.py:669-673` は「color/monochro のどちらかで MLflow が有効」なときに限り `parallel_train` を自動的に `false` へ強制する。一方 `TrainingConfig.base_overrides`（`training_service.py`）は ver2 UI から起票する**すべて**のジョブに対し無条件で `color.mlflow.enabled=false`／`monochro.mlflow.enabled=false` を付与し、`parallel_train` 自体を上書きすることもない。したがって **ver2 UI 経由の起票では直列化条件に到達せず、既定の `parallel_train: true`（`training/conf/config.yaml`）のまま並列実行される**。この制約が現実に影響するのは `training/conf/config.yaml` を手動で書き換える、または ver2 を経由せず `pipline.py` を直接起動する場合のみであり、本タスクでは対応しない。
 - `training/` 側の print/tqdm 呼び出し自体は変更しない（学習ロジック改変禁止）。
 - バックエンドの WebSocket 配信仕様（素通し・揮発、`.kiro/specs/retraining` M-R6）は変更しない。
