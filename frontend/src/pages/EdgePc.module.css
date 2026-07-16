@@ -17,7 +17,7 @@
 }
 
 .field label {
-  font-size: 10.5px;
+  font-size: var(--font-size-caption);
   font-weight: 600;
   letter-spacing: 0.5px;
   color: var(--color-text-secondary);
@@ -27,18 +27,18 @@
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.14);
   color: var(--color-text-primary);
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-radius: 9px;
-  font-size: 13px;
+  font-size: var(--font-size-body);
 }
 
 .submitButton {
-  padding: 9px 22px;
+  padding: 11px 24px;
   border-radius: 9px;
   background: linear-gradient(120deg, var(--color-accent-cyan), #38bdf8);
   border: none;
   color: #04141a;
-  font-size: 13px;
+  font-size: var(--font-size-body);
   font-weight: 700;
   cursor: pointer;
   font-family: inherit;
@@ -68,15 +68,15 @@
 }
 
 .cardName {
-  font-size: 14px;
+  font-size: var(--font-size-body);
   font-weight: 700;
   color: var(--color-text-primary);
   letter-spacing: 0.5px;
 }
 
 .badgeEnabled {
-  font-size: 11px;
-  padding: 3px 10px;
+  font-size: var(--font-size-caption);
+  padding: 4px 12px;
   border-radius: 999px;
   background: rgba(52, 211, 153, 0.14);
   color: var(--color-accent-success);
@@ -84,8 +84,8 @@
 }
 
 .badgeDisabled {
-  font-size: 11px;
-  padding: 3px 10px;
+  font-size: var(--font-size-caption);
+  padding: 4px 12px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.05);
   color: var(--color-text-muted);
@@ -93,7 +93,7 @@
 }
 
 .ipLabel {
-  font-size: 10.5px;
+  font-size: var(--font-size-caption);
   font-weight: 600;
   letter-spacing: 0.5px;
   color: var(--color-text-secondary);
@@ -101,7 +101,7 @@
 
 .ipValue {
   font-family: var(--font-mono);
-  font-size: 20px;
+  font-size: var(--font-size-kpi);
   font-weight: 700;
   color: var(--color-text-primary);
   letter-spacing: -0.5px;
@@ -109,7 +109,7 @@
 
 .meta {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--font-size-caption);
   color: var(--color-text-secondary);
 }
 
@@ -121,12 +121,12 @@
 }
 
 .actionButton {
-  padding: 5px 12px;
+  padding: 6px 14px;
   border-radius: 999px;
   background: rgba(34, 211, 238, 0.14);
   color: #7fe3f3;
   border: 1px solid rgba(34, 211, 238, 0.25);
-  font-size: 11.5px;
+  font-size: var(--font-size-caption);
   cursor: pointer;
   font-family: inherit;
 }
