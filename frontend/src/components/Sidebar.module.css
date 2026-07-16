@@ -1,5 +1,5 @@
 .sidebar {
-  width: 228px;
+  width: 250px;
   flex: none;
   border-right: 1px solid var(--color-border);
   background: var(--color-panel-sidebar);
@@ -12,7 +12,7 @@
 }
 
 .sectionLabel {
-  font-size: 10px;
+  font-size: var(--font-size-caption);
   font-weight: 700;
   letter-spacing: 1.6px;
   color: var(--color-text-muted);
@@ -23,11 +23,11 @@
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 9px 10px;
+  padding: 11px 12px;
   border-radius: 9px;
   color: var(--color-text-secondary);
   text-decoration: none;
-  font-size: 13px;
+  font-size: var(--font-size-body);
   background: transparent;
 }
 
@@ -49,13 +49,13 @@
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 9px 10px;
+  padding: 11px 12px;
   border-radius: 9px;
   color: var(--color-text-secondary);
   background: transparent;
   border: none;
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--font-size-body);
   cursor: pointer;
   width: 100%;
   text-align: left;
@@ -74,11 +74,11 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 8px 10px;
+  padding: 9px 11px;
   border-radius: 9px;
   color: var(--color-text-secondary);
   text-decoration: none;
-  font-size: 12.5px;
+  font-size: var(--font-size-caption);
 }
 
 .subNavItemActive {
