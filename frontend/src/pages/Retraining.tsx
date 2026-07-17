@@ -8,7 +8,7 @@ import {
   useJobProgress,
   useJobs,
 } from "@/hooks/useRetraining";
-import type { Phase, ProgressState } from "@/pages/retrainingProgress";
+import { STAGE_LABEL, type Phase, type ProgressState } from "@/pages/retrainingProgress";
 
 import styles from "./Retraining.module.css";
 
@@ -122,7 +122,7 @@ function ProgressBar({ phase, state }: { phase: Phase; state?: ProgressState }) 
 
 function ProgressPanel({ job }: { job: Job }) {
   const active = !isTerminal(job.status);
-  const { lines, importantLines, progress, state } = useJobProgress(job.id, active);
+  const { lines, importantLines, progress, stage, state } = useJobProgress(job.id, active);
 
   return (
     <div className={styles.progressCard}>
@@ -135,6 +135,11 @@ function ProgressPanel({ job }: { job: Job }) {
           {STATUS_LABEL[job.status]}
           {active ? (state === "open" ? " 配信中" : " 接続中…") : " 学習は終了しています"}
         </span>
+        {active && (
+          <span className={styles.stageLabel}>
+            現在の処理: {stage ? STAGE_LABEL[stage] : "起動中…"}
+          </span>
+        )}
       </div>
       <div className={styles.progressBars}>
         <ProgressBar phase="monochro" state={progress.monochro} />

@@ -215,3 +215,9 @@
   color: var(--color-text-secondary);
   margin-bottom: 8px;
 }
+
+.stageLabel {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-secondary);
+  opacity: 0.85;
+}

@@ -262,4 +262,52 @@ describe("Retraining 画面", () => {
     );
     await waitFor(() => expect(bar).toHaveAttribute("aria-valuenow", "50"));
   });
+
+  it("ステージ表示: マーカー行に応じて「現在の処理」ラベルが更新される", async () => {
+    mocked.listJobs.mockResolvedValue({
+      items: [job({ id: 14, status: "RUNNING" })],
+      limit: 50,
+      offset: 0,
+    });
+    render(<Retraining />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "進捗" }));
+    await waitFor(() => expect(FakeWebSocket.instances.length).toBe(1));
+    const ws = FakeWebSocket.instances[0];
+    await waitFor(() => expect(ws.readyState).toBe(1));
+
+    expect(screen.getByText("現在の処理: 起動中…")).toBeInTheDocument();
+
+    ws.emit("バックアップ作成中...");
+    await waitFor(() => expect(screen.getByText("現在の処理: バックアップ中")).toBeInTheDocument());
+
+    ws.emit("並列学習 GPU 割当: monochro=GPU0, color=GPU1 (検出: 2枚)");
+    await waitFor(() => expect(screen.getByText("現在の処理: 学習中")).toBeInTheDocument());
+  });
+
+  it("ステージ表示: 単調前進のみで、前段のマーカーが遅延到着しても後退しない", async () => {
+    mocked.listJobs.mockResolvedValue({
+      items: [job({ id: 15, status: "RUNNING" })],
+      limit: 50,
+      offset: 0,
+    });
+    render(<Retraining />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "進捗" }));
+    await waitFor(() => expect(FakeWebSocket.instances.length).toBe(1));
+    const ws = FakeWebSocket.instances[0];
+    await waitFor(() => expect(ws.readyState).toBe(1));
+
+    ws.emit("Exported ONNX: /model_dir/501/monochro/501_monochro_model.onnx");
+    await waitFor(() =>
+      expect(screen.getByText("現在の処理: モデル出力・評価中")).toBeInTheDocument(),
+    );
+
+    // 並列学習中のcolor側の開始行が遅れて届いても、export_evalより前段のtrainingへは戻らない。
+    ws.emit("🔵 カラーAIの学習を開始します... (物理 GPU: 1, 論理 cuda:0, color: 501)");
+    await waitFor(() =>
+      expect(screen.getByText("現在の処理: モデル出力・評価中")).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("現在の処理: 学習中")).not.toBeInTheDocument();
+  });
 });
