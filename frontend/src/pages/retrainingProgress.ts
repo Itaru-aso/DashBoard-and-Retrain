@@ -61,3 +61,35 @@ export function classifyLine(raw: string): ClassifiedLine {
 
   return { kind: "progress", phase, raw, percent, current, total, loss, eta, isMainLoop };
 }
+
+export type Stage = "backup" | "training" | "export_eval" | "completed";
+
+export const STAGE_LABEL: Record<Stage, string> = {
+  backup: "バックアップ中",
+  training: "学習中",
+  export_eval: "モデル出力・評価中",
+  completed: "完了",
+};
+
+export const STAGE_ORDER: readonly Stage[] = ["backup", "training", "export_eval", "completed"];
+
+// training/pipline.py・training/model_exporter.py が実際に出力するテキストをマーカーに使う
+// （print文自体は変更しない）。並列学習では monochro/color どちらの開始行が来ても training
+// ステージなので、複数マーカーが同一ステージを指すのは意図通り。
+const STAGE_MARKERS: { stage: Stage; pattern: RegExp }[] = [
+  { stage: "backup", pattern: /バックアップ作成中/ },
+  {
+    stage: "training",
+    pattern: /(モノクロAIの学習を開始します|カラーAIの学習を開始します|並列学習 GPU 割当)/,
+  },
+  { stage: "export_eval", pattern: /^Exported ONNX:/ },
+  { stage: "completed", pattern: /パイプライン完了/ },
+];
+
+/** 生ログ1行から検出できるジョブ全体のステージを返す（該当なしはundefined）。 */
+export function detectStage(raw: string): Stage | undefined {
+  for (const { stage, pattern } of STAGE_MARKERS) {
+    if (pattern.test(raw)) return stage;
+  }
+  return undefined;
+}

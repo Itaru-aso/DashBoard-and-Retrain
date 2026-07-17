@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyLine } from "./retrainingProgress";
+import { classifyLine, detectStage } from "./retrainingProgress";
 
 describe("classifyLine", () => {
   it("tqdm進捗行（接頭辞なし・Current loss付き）を progress として分類する", () => {
@@ -95,5 +95,41 @@ describe("classifyLine", () => {
     expect(result.current).toBe(20);
     expect(result.total).toBe(121);
     expect(result.isMainLoop).toBe(false);
+  });
+});
+
+describe("detectStage", () => {
+  it("バックアップ開始のマーカーを検出する", () => {
+    expect(detectStage("バックアップ作成中...")).toBe("backup");
+  });
+
+  it("学習開始のマーカー（モノクロ/カラー/並列学習割当のいずれ）を検出する", () => {
+    expect(
+      detectStage("🟢 モノクロAIの学習を開始します... (物理 GPU: 0, 論理 cuda:0, color: 501)"),
+    ).toBe("training");
+    expect(
+      detectStage("🔵 カラーAIの学習を開始します... (物理 GPU: 1, 論理 cuda:0, color: 501)"),
+    ).toBe("training");
+    expect(
+      detectStage("並列学習 GPU 割当: monochro=GPU0, color=GPU1 (検出: 2枚)"),
+    ).toBe("training");
+  });
+
+  it("ONNXエクスポート完了のマーカーを検出する", () => {
+    expect(detectStage("Exported ONNX: /model_dir/501/color/501_color_model.onnx")).toBe(
+      "export_eval",
+    );
+  });
+
+  it("パイプライン完了のマーカーを検出する", () => {
+    expect(detectStage("パイプライン完了")).toBe("completed");
+  });
+
+  it("マーカーに一致しない行は undefined を返す", () => {
+    expect(
+      detectStage("Current loss: 0.37  :  50%|████ | 100/200 [00:01<00:01, 1.0it/s]"),
+    ).toBeUndefined();
+    expect(detectStage("[monochro] Validation Loss: 1.4732")).toBeUndefined();
+    expect(detectStage("[STATUS] RUNNING color=501")).toBeUndefined();
   });
 });
