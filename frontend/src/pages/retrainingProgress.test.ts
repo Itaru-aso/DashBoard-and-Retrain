@@ -141,6 +141,17 @@ describe("splitGluedLine", () => {
       splitGluedLine("Current loss: 0.37  :  91%|████ | 100/200 [00:01<00:01, 1.0it/s]"),
     ).toEqual(["Current loss: 0.37  :  91%|████ | 100/200 [00:01<00:01, 1.0it/s]"]);
   });
+
+  it("[monochro]/[color] 接頭辞付きの連結行では、分割後の2件目にも同じ接頭辞を付与する", () => {
+    // 並列学習では両モデルのログが混在するため、分割後の断片が接頭辞を失うと
+    // どちらのモデルのValidation Lossか分からなくなる（実ログで観測）。
+    const raw =
+      "[color] Current loss: 0.5505  :   8%|▊         | 2000/24120 [05:55<55:31,  6.64it/s]Validation Loss: 3.0476";
+    expect(splitGluedLine(raw)).toEqual([
+      "[color] Current loss: 0.5505  :   8%|▊         | 2000/24120 [05:55<55:31,  6.64it/s]",
+      "[color] Validation Loss: 3.0476",
+    ]);
+  });
 });
 
 describe("stripAnsi", () => {

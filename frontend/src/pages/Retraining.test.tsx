@@ -334,7 +334,9 @@ describe("Retraining 画面", () => {
     await waitFor(() => expect(bar).toHaveAttribute("aria-valuenow", "8"));
 
     const log = screen.getByLabelText("学習ログ");
-    await waitFor(() => expect(within(log).getByText("Validation Loss: 3.0476")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(within(log).getByText("[color] Validation Loss: 3.0476")).toBeInTheDocument(),
+    );
     expect(within(log).queryByText(/Current loss/)).not.toBeInTheDocument();
   });
 

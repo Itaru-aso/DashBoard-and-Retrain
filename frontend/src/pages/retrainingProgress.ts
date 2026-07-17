@@ -48,7 +48,11 @@ const TQDM_GLUE_SPLIT =
 export function splitGluedLine(raw: string): string[] {
   const m = TQDM_GLUE_SPLIT.exec(raw);
   if (!m) return [raw];
-  return [m[1], m[2]];
+  // [monochro]/[color]接頭辞は行頭にしか付かないため、分割後の2件目には残らない。
+  // 並列学習では両モデルのログが混在するため、接頭辞を引き継がせて帰属を保つ。
+  const phaseMatch = raw.match(PHASE_PREFIX);
+  const prefix = phaseMatch ? phaseMatch[0] : "";
+  return [m[1], `${prefix}${m[2]}`];
 }
 
 // 学習ループ本体（train_func_color.py/train_func_monochro.py の tqdm_obj.set_description）
