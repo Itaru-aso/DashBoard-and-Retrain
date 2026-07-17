@@ -14,7 +14,14 @@ import {
   listJobs,
   progressWsUrl,
 } from "@/api/retrainingApi";
-import { classifyLine, type Phase, type ProgressState } from "@/pages/retrainingProgress";
+import {
+  classifyLine,
+  detectStage,
+  STAGE_ORDER,
+  type Phase,
+  type ProgressState,
+  type Stage,
+} from "@/pages/retrainingProgress";
 
 const KEY = {
   jobs: (status?: JobStatus) => ["retraining", "jobs", status ?? "all"] as const,
@@ -78,6 +85,7 @@ export function useJobProgress(jobId: number | null, active: boolean) {
   const [lines, setLines] = useState<string[]>([]);
   const [importantLines, setImportantLines] = useState<string[]>([]);
   const [progress, setProgress] = useState<Partial<Record<Phase, ProgressState>>>({});
+  const [stage, setStage] = useState<Stage | undefined>(undefined);
   const [state, setState] = useState<WsState>("closed");
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -86,6 +94,7 @@ export function useJobProgress(jobId: number | null, active: boolean) {
     setLines([]);
     setImportantLines([]);
     setProgress({});
+    setStage(undefined);
     setState("connecting");
     const ws = new WebSocket(progressWsUrl(jobId));
     wsRef.current = ws;
@@ -94,6 +103,17 @@ export function useJobProgress(jobId: number | null, active: boolean) {
     ws.onmessage = (ev) => {
       const raw = String(ev.data);
       setLines((prev) => [...prev, raw]);
+
+      const detectedStage = detectStage(raw);
+      if (detectedStage) {
+        // 単調前進のみ（後退しない）。並列学習で monochro/color どちらの行が
+        // 来ても同じ training ステージなので後退は起きない。
+        setStage((prev) =>
+          prev === undefined || STAGE_ORDER.indexOf(detectedStage) > STAGE_ORDER.indexOf(prev)
+            ? detectedStage
+            : prev,
+        );
+      }
 
       const classified = classifyLine(raw);
       if (classified.kind === "progress") {
@@ -128,5 +148,5 @@ export function useJobProgress(jobId: number | null, active: boolean) {
     };
   }, [jobId, active]);
 
-  return { lines, importantLines, progress, state };
+  return { lines, importantLines, progress, stage, state };
 }
