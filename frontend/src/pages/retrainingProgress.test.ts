@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyLine, detectStage } from "./retrainingProgress";
+import { classifyLine, detectStage, splitGluedLine, stripAnsi } from "./retrainingProgress";
 
 describe("classifyLine", () => {
   it("tqdm進捗行（接頭辞なし・Current loss付き）を progress として分類する", () => {
@@ -95,6 +95,83 @@ describe("classifyLine", () => {
     expect(result.current).toBe(20);
     expect(result.total).toBe(121);
     expect(result.isMainLoop).toBe(false);
+  });
+
+  it("descが無いtqdm初期フレーム（%がスペースでパディングされる）も progress として分類する", () => {
+    // tqdmは percentage を3桁幅で右詰めするため、desc無しの最初のフレームは
+    // "  0%|...|" のように先頭に空白が入る。descありの場合は ":\s*" で吸収されるが
+    // desc無しだとTQDM_PATTERNの先頭にマッチせず other に落ちていた（実ログで観測）。
+    const raw = "  0%|          | 0/24120 [00:00<?, ?it/s]";
+    const result = classifyLine(raw);
+    expect(result.kind).toBe("progress");
+    if (result.kind !== "progress") throw new Error("unreachable");
+    expect(result.percent).toBe(0);
+    expect(result.current).toBe(0);
+    expect(result.total).toBe(24120);
+  });
+});
+
+describe("splitGluedLine", () => {
+  it("tqdm進捗フレームと直後のprint出力が分離子なしで連結された行を2行に分割する", () => {
+    // tqdmの最終フレームは改行を出さないため、直後の print("Validation Loss: ...") が
+    // \r/\n無しでそのまま連結される（実ログで観測: 学習ループの検証チェックポイント毎）。
+    // 分割しないとTQDM_PATTERNの末尾アンカーにマッチせず other 判定になり、重要ログに
+    // 読みにくい結合行が残る。
+    const raw =
+      "Current loss: 0.5505  :   8%|▊         | 2000/24120 [05:55<55:31,  6.64it/s]Validation Loss: 3.0476";
+    const pieces = splitGluedLine(raw);
+    expect(pieces).toEqual([
+      "Current loss: 0.5505  :   8%|▊         | 2000/24120 [05:55<55:31,  6.64it/s]",
+      "Validation Loss: 3.0476",
+    ]);
+
+    const progressPiece = classifyLine(pieces[0]);
+    expect(progressPiece.kind).toBe("progress");
+    if (progressPiece.kind !== "progress") throw new Error("unreachable");
+    expect(progressPiece.percent).toBe(8);
+    expect(progressPiece.isMainLoop).toBe(true);
+
+    const otherPiece = classifyLine(pieces[1]);
+    expect(otherPiece).toEqual({ kind: "other", phase: undefined, raw: "Validation Loss: 3.0476" });
+  });
+
+  it("連結されていない通常の行は1件のまま返す", () => {
+    expect(splitGluedLine("パイプライン完了")).toEqual(["パイプライン完了"]);
+    expect(
+      splitGluedLine("Current loss: 0.37  :  91%|████ | 100/200 [00:01<00:01, 1.0it/s]"),
+    ).toEqual(["Current loss: 0.37  :  91%|████ | 100/200 [00:01<00:01, 1.0it/s]"]);
+  });
+});
+
+describe("stripAnsi", () => {
+  it("末尾のANSIカーソル制御を除去する", () => {
+    // 入れ子tqdmバーが閉じる際に付与される \x1b[A（実UIで「Validation Loss: 2.046[A」
+    // のような表示になっていた不具合の原因）。
+    expect(stripAnsi("Validation Loss: 2.046\x1b[A")).toBe("Validation Loss: 2.046");
+  });
+
+  it("ANSIエスケープのみの行は空文字になる", () => {
+    // \x1b[A 単独の行（実UIで「[A」だけの行が並んでいた不具合の原因）。
+    expect(stripAnsi("\x1b[A")).toBe("");
+  });
+
+  it("ANSIエスケープを含まない行はそのまま返す", () => {
+    expect(stripAnsi("パイプライン完了")).toBe("パイプライン完了");
+  });
+});
+
+describe("classifyLine（ANSI除去）", () => {
+  it("classifyLineが返すrawからもANSIカーソル制御が除去されている", () => {
+    // 分類判定用の内部処理だけでなく、表示に使うraw自体からも除去しないと、
+    // 重要ログ・元ログに制御文字の残骸（"[A"）がそのまま出てしまう。
+    const result = classifyLine("Validation Loss: 2.046\x1b[A");
+    expect(result).toEqual({ kind: "other", phase: undefined, raw: "Validation Loss: 2.046" });
+  });
+
+  it("接頭辞だけでANSI除去後に本文が無い行は raw が空文字になる", () => {
+    // "[color] \x1b[A" のような、ANSIエスケープのみの行に[monochro]/[color]接頭辞が
+    // 付いた形（実UIで観測: "[A" だけの行が並んでいた不具合の原因）。
+    expect(classifyLine("[color] \x1b[A")).toEqual({ kind: "other", phase: "color", raw: "" });
   });
 });
 

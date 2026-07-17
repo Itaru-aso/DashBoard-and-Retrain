@@ -310,4 +310,59 @@ describe("Retraining 画面", () => {
     );
     expect(screen.queryByText("現在の処理: 学習中")).not.toBeInTheDocument();
   });
+
+  it("tqdmフレームとValidation Loss出力が連結された行でもバー更新とログ表示が正しく行われる", async () => {
+    mocked.listJobs.mockResolvedValue({
+      items: [job({ id: 16, status: "RUNNING" })],
+      limit: 50,
+      offset: 0,
+    });
+    render(<Retraining />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "進捗" }));
+    await waitFor(() => expect(FakeWebSocket.instances.length).toBe(1));
+    const ws = FakeWebSocket.instances[0];
+    await waitFor(() => expect(ws.readyState).toBe(1));
+
+    // tqdmの最終フレームが改行を出さず、直後のprint("Validation Loss: ...")が
+    // \r/\n無しでそのまま連結された行（実ログで観測）。
+    ws.emit(
+      "[color] Current loss: 0.5505  :   8%|▊         | 2000/24120 [05:55<55:31,  6.64it/s]Validation Loss: 3.0476",
+    );
+
+    const bar = await screen.findByRole("progressbar", { name: "カラーAI進捗" });
+    await waitFor(() => expect(bar).toHaveAttribute("aria-valuenow", "8"));
+
+    const log = screen.getByLabelText("学習ログ");
+    await waitFor(() => expect(within(log).getByText("Validation Loss: 3.0476")).toBeInTheDocument());
+    expect(within(log).queryByText(/Current loss/)).not.toBeInTheDocument();
+  });
+
+  it("ANSIカーソル制御（\\x1b[A）の残骸が学習ログ・元ログに表示されない", async () => {
+    mocked.listJobs.mockResolvedValue({
+      items: [job({ id: 17, status: "RUNNING" })],
+      limit: 50,
+      offset: 0,
+    });
+    render(<Retraining />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "進捗" }));
+    await waitFor(() => expect(FakeWebSocket.instances.length).toBe(1));
+    const ws = FakeWebSocket.instances[0];
+    await waitFor(() => expect(ws.readyState).toBe(1));
+
+    // 実UIで観測: "Validation Loss: 2.046[A" のように連結された行と、
+    // "[A" だけの行が続けて届く（入れ子tqdmバーが閉じる際の残骸）。
+    ws.emit("[color] Validation Loss: 2.046\x1b[A");
+    ws.emit("[color] \x1b[A");
+    ws.emit("[color] \x1b[A");
+
+    const log = await screen.findByLabelText("学習ログ");
+    await waitFor(() => expect(within(log).getByText(/Validation Loss: 2.046/)).toBeInTheDocument());
+    expect(log.textContent).not.toContain("[A");
+
+    fireEvent.click(screen.getByText("元ログを表示"));
+    const raw = screen.getByLabelText("元ログ");
+    expect(raw.textContent).not.toContain("[A");
+  });
 });

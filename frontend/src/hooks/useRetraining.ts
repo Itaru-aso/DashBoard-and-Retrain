@@ -17,6 +17,8 @@ import {
 import {
   classifyLine,
   detectStage,
+  splitGluedLine,
+  stripAnsi,
   STAGE_ORDER,
   type Phase,
   type ProgressState,
@@ -101,41 +103,48 @@ export function useJobProgress(jobId: number | null, active: boolean) {
 
     ws.onopen = () => setState("open");
     ws.onmessage = (ev) => {
-      const raw = String(ev.data);
+      // 入れ子tqdmバーのカーソル制御（\x1b[A）は表示に無意味なため先に除去する。
+      // 除去した結果が空になる行（制御文字のみの行）は何も表示しない。
+      const raw = stripAnsi(String(ev.data));
+      if (!raw) return;
       setLines((prev) => [...prev, raw]);
 
-      const detectedStage = detectStage(raw);
-      if (detectedStage) {
-        // 単調前進のみ（後退しない）。並列学習で monochro/color どちらの行が
-        // 来ても同じ training ステージなので後退は起きない。
-        setStage((prev) =>
-          prev === undefined || STAGE_ORDER.indexOf(detectedStage) > STAGE_ORDER.indexOf(prev)
-            ? detectedStage
-            : prev,
-        );
-      }
-
-      const classified = classifyLine(raw);
-      if (classified.kind === "progress") {
-        // phase不明、または学習ループ本体以外（閾値計算・中間処理など）の進捗行は
-        // バーに反映しない。totalが小さくすぐ100%に達するため、学習ループ本体の
-        // 進捗と混ぜると「学習が完了した」ように誤認させる（phase不明は並列学習では
-        // 常に[monochro]/[color]接頭辞が付くため実運用では発生しない）。
-        if (classified.phase && classified.isMainLoop) {
-          const phase = classified.phase;
-          setProgress((prev) => ({
-            ...prev,
-            [phase]: {
-              percent: classified.percent,
-              current: classified.current,
-              total: classified.total,
-              loss: classified.loss,
-              eta: classified.eta,
-            },
-          }));
+      // tqdmの最終フレームは改行を出さず直後のprint()出力と連結される場合があるため、
+      // 分類前に分割する（通常行は1件のまま）。
+      for (const piece of splitGluedLine(raw)) {
+        const detectedStage = detectStage(piece);
+        if (detectedStage) {
+          // 単調前進のみ（後退しない）。並列学習で monochro/color どちらの行が
+          // 来ても同じ training ステージなので後退は起きない。
+          setStage((prev) =>
+            prev === undefined || STAGE_ORDER.indexOf(detectedStage) > STAGE_ORDER.indexOf(prev)
+              ? detectedStage
+              : prev,
+          );
         }
-      } else {
-        setImportantLines((prev) => [...prev, raw]);
+
+        const classified = classifyLine(piece);
+        if (classified.kind === "progress") {
+          // phase不明、または学習ループ本体以外（閾値計算・中間処理など）の進捗行は
+          // バーに反映しない。totalが小さくすぐ100%に達するため、学習ループ本体の
+          // 進捗と混ぜると「学習が完了した」ように誤認させる（phase不明は並列学習では
+          // 常に[monochro]/[color]接頭辞が付くため実運用では発生しない）。
+          if (classified.phase && classified.isMainLoop) {
+            const phase = classified.phase;
+            setProgress((prev) => ({
+              ...prev,
+              [phase]: {
+                percent: classified.percent,
+                current: classified.current,
+                total: classified.total,
+                loss: classified.loss,
+                eta: classified.eta,
+              },
+            }));
+          }
+        } else if (classified.raw) {
+          setImportantLines((prev) => [...prev, classified.raw]);
+        }
       }
     };
     ws.onerror = () => setState("closed");

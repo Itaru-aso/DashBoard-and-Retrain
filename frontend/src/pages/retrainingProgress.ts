@@ -21,13 +21,35 @@ const PHASE_PREFIX = /^\[(monochro|color)\]\s*/;
 // eslint-disable-next-line no-control-regex -- ANSI除去には制御文字\x1bのマッチが必要
 const ANSI_CSI = /\x1b\[[0-9;]*[A-Za-z]/g;
 
+/** ANSIカーソル制御（\x1b[A等）を除去する。tqdm入れ子バーの残骸が表示に漏れるのを防ぐ。 */
+export function stripAnsi(text: string): string {
+  return text.replace(ANSI_CSI, "");
+}
+
 // tqdm既定フォーマット: "{desc}: {percent}%|{bar}| {n}/{total} [{elapsed}<{remaining}, {rate}]"
 // descはtqdmが空文字のとき省略されるため任意（training/ 側のtqdm呼び出しは変更しない前提で
 // 両方のパターンを受け付ける）。
+// descが無いフレーム（desc未設定時の最初のtqdm出力等）はtqdmがpercentageを3桁幅で
+// 右詰めするため先頭に空白パディングが入る（例: "  0%|..."）。descありの場合は
+// ":\s*" が吸収するが、desc無しの場合に備えて percent の前にも "\s*" を許容する。
 const TQDM_PATTERN =
-  /^(?:(?<desc>.*?):\s*)?(?<percent>\d+)%\|.*?\|\s*(?<current>\d+)\/(?<total>\d+)\s*\[(?<elapsed>[^<]*)<(?<remaining>[^,]*),\s*(?<rate>[^\]]*)\]\s*$/;
+  /^(?:(?<desc>.*?):\s*)?\s*(?<percent>\d+)%\|.*?\|\s*(?<current>\d+)\/(?<total>\d+)\s*\[(?<elapsed>[^<]*)<(?<remaining>[^,]*),\s*(?<rate>[^\]]*)\]\s*$/;
 
 const LOSS_PATTERN = /Current loss:\s*([\d.]+)/;
+
+// tqdmの最終フレームは改行を出さないため、直後の print() 出力（例: "Validation Loss: ..."）が
+// \r/\n無しでそのまま連結される場合がある（実ログで観測: 学習ループの検証チェックポイント毎）。
+// 分割しないとTQDM_PATTERNの末尾アンカーにマッチせず other 判定になり、重要ログに読みにくい
+// 結合行が残る。
+const TQDM_GLUE_SPLIT =
+  /^(.*?\d+%\|.*?\|\s*\d+\/\d+\s*\[[^<]*<[^,]*,\s*[^\]]*\])([\s\S]+)$/;
+
+/** tqdm進捗フレームに後続テキストが分離子なしで連結された行を2行に分割する（該当なしは1件配列）。 */
+export function splitGluedLine(raw: string): string[] {
+  const m = TQDM_GLUE_SPLIT.exec(raw);
+  if (!m) return [raw];
+  return [m[1], m[2]];
+}
 
 // 学習ループ本体（train_func_color.py/train_func_monochro.py の tqdm_obj.set_description）
 // のdescはこの文字列で始まる。"Computing threshold scores"（学習完了直後の閾値計算）や
@@ -36,14 +58,19 @@ const LOSS_PATTERN = /Current loss:\s*([\d.]+)/;
 const MAIN_LOOP_DESC = /^Current loss:/;
 
 /** WebSocketで受信した1行を、tqdm進捗行かそれ以外（重要ログ）かに分類する。 */
-export function classifyLine(raw: string): ClassifiedLine {
+export function classifyLine(rawInput: string): ClassifiedLine {
+  // 表示に使うraw自体からもANSIを除去する（内部の判定用だけでは、重要ログ・元ログに
+  // 制御文字の残骸がそのまま表示されてしまう）。
+  const raw = stripAnsi(rawInput);
   const phaseMatch = raw.match(PHASE_PREFIX);
   const phase = phaseMatch ? (phaseMatch[1] as Phase) : undefined;
-  const rest = (phaseMatch ? raw.slice(phaseMatch[0].length) : raw).replace(ANSI_CSI, "");
+  const rest = phaseMatch ? raw.slice(phaseMatch[0].length) : raw;
 
   const m = TQDM_PATTERN.exec(rest);
   if (!m?.groups) {
-    return { kind: "other", phase, raw };
+    // 接頭辞([monochro]/[color])を除いた本文が無い（ANSI除去後に中身が空になった等）場合は、
+    // 接頭辞だけの意味を持たない行として raw も空にする（重要ログに空の行が残らないように）。
+    return { kind: "other", phase, raw: rest.trim() ? raw : "" };
   }
 
   const percent = Number(m.groups.percent);
