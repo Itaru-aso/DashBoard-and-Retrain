@@ -235,4 +235,31 @@ describe("Retraining 画面", () => {
     await waitFor(() => expect(screen.getByLabelText("元ログ")).toBeVisible());
     expect(within(screen.getByLabelText("元ログ")).getByText(/Current loss/)).toBeInTheDocument();
   });
+
+  it("学習ループ以外の進捗（閾値計算等）で進捗バーが100%に誤表示されない", async () => {
+    mocked.listJobs.mockResolvedValue({
+      items: [job({ id: 13, status: "RUNNING" })],
+      limit: 50,
+      offset: 0,
+    });
+    render(<Retraining />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "進捗" }));
+    await waitFor(() => expect(FakeWebSocket.instances.length).toBe(1));
+    const ws = FakeWebSocket.instances[0];
+    await waitFor(() => expect(ws.readyState).toBe(1));
+
+    ws.emit(
+      "[color] Current loss: 0.3955  :  50%|████▉     | 12000/24120 [34:13<30:28,  6.63it/s]",
+    );
+    const bar = await screen.findByRole("progressbar", { name: "カラーAI進捗" });
+    await waitFor(() => expect(bar).toHaveAttribute("aria-valuenow", "50"));
+
+    // 学習完了直後に1回だけ走る閾値計算（totalが小さくすぐ100%に達する）。
+    // これに引っ張られて進捗バーが100%へ飛んではならない。
+    ws.emit(
+      "[color] Computing threshold scores:  100%|██████████| 50/50 [00:03<00:00, 14.2it/s]",
+    );
+    await waitFor(() => expect(bar).toHaveAttribute("aria-valuenow", "50"));
+  });
 });

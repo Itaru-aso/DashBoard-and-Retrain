@@ -97,9 +97,11 @@ export function useJobProgress(jobId: number | null, active: boolean) {
 
       const classified = classifyLine(raw);
       if (classified.kind === "progress") {
-        // phase不明の進捗行は表示先が定まらないため無視する（並列学習では常に
-        // [monochro]/[color] 接頭辞が付くため実運用では発生しない）。
-        if (classified.phase) {
+        // phase不明、または学習ループ本体以外（閾値計算・中間処理など）の進捗行は
+        // バーに反映しない。totalが小さくすぐ100%に達するため、学習ループ本体の
+        // 進捗と混ぜると「学習が完了した」ように誤認させる（phase不明は並列学習では
+        // 常に[monochro]/[color]接頭辞が付くため実運用では発生しない）。
+        if (classified.phase && classified.isMainLoop) {
           const phase = classified.phase;
           setProgress((prev) => ({
             ...prev,

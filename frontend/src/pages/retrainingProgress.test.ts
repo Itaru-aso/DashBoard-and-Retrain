@@ -59,4 +59,41 @@ describe("classifyLine", () => {
     expect(() => classifyLine("50%|███ 完全ではない行")).not.toThrow();
     expect(classifyLine("50%|███ 完全ではない行").kind).toBe("other");
   });
+
+  it("Current loss（学習ループ本体）の進捗行は isMainLoop=true になる", () => {
+    const raw =
+      "[color] Current loss: 0.3955  :  50%|████▉     | 12000/24120 [34:13<30:28,  6.63it/s]";
+    const result = classifyLine(raw);
+    expect(result.kind).toBe("progress");
+    if (result.kind !== "progress") throw new Error("unreachable");
+    expect(result.isMainLoop).toBe(true);
+  });
+
+  it("Computing threshold scores（学習ループ以外の進捗）は isMainLoop=false になる", () => {
+    // 学習完了直後に1回だけ走る閾値計算。totalが小さくすぐ100%に達するため、
+    // 学習ループ本体の進捗バーに混ぜてはならない（実ログで観測: 学習は27%/50%
+    // しか進んでいないのにUIの進捗バーが100%と表示される不具合の原因）。
+    const raw =
+      "[color] Computing threshold scores:  100%|██████████| 50/50 [00:03<00:00, 14.2it/s]";
+    const result = classifyLine(raw);
+    expect(result.kind).toBe("progress");
+    if (result.kind !== "progress") throw new Error("unreachable");
+    expect(result.isMainLoop).toBe(false);
+  });
+
+  it("入れ子tqdmバー（末尾にANSIカーソル制御 \\x1b[A）も progress として分類し、isMainLoop=false になる", () => {
+    // 学習中に定期的に挟まる中間処理（map正規化）。tqdmの入れ子バー描画に伴う
+    // ANSIエスケープが末尾に付き、これを考慮しないと other 判定になって
+    // 重要ログが埋め尽くされる（実ログで多数観測）。
+    const raw =
+      "[color] Intermediate map normalization:  17%|██▋       | 20/121 [00:01<00:09, 10.36it/s]\x1b[A";
+    const result = classifyLine(raw);
+    expect(result.kind).toBe("progress");
+    if (result.kind !== "progress") throw new Error("unreachable");
+    expect(result.phase).toBe("color");
+    expect(result.percent).toBe(17);
+    expect(result.current).toBe(20);
+    expect(result.total).toBe(121);
+    expect(result.isMainLoop).toBe(false);
+  });
 });
