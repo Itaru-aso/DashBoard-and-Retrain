@@ -12,8 +12,7 @@ from torchvision import transforms
 from tqdm import tqdm
 
 from utils.common import get_pdn_small, get_autoencoder
-from utils.edge_mask import apply_edge_mask_zero
-from evaluation.predict import predict as _predict, compute_image_score
+from utils.scoring_transform import compute_anomaly_score
 from utils.split_manager import load_split
 
 out_channels = 384
@@ -143,7 +142,8 @@ def load_model(model_dir, device='cpu', image_size_height=256, image_size_width=
 
     Returns:
         dict: teacher, student, autoencoder, teacher_mean, teacher_std,
-              q_st_start, q_st_end, q_ae_start, q_ae_end, channel_weights, para
+              q_st_start, q_st_end, q_ae_start, q_ae_end, channel_weights,
+              height, width, st_para, ae_para, cand1, edge_mask_w, para
     """
     para_path = os.path.join(model_dir, 'para.json')
     with open(para_path, 'r') as f:
@@ -191,6 +191,19 @@ def load_model(model_dir, device='cpu', image_size_height=256, image_size_width=
     # edge_mask_w (Phase H): para から自動取得。旧 para.json は 0 として扱う。
     edge_mask_w = int(para.get('edge_mask_w', 0))
 
+    # 候補1 (z-score OR, monochro 専用): cand1_enabled があれば μ,σ,A,Z を読む。
+    # model.py の load_para() と同じ変換 (mu/sigma を (1,1,H,W) にreshape)。
+    cand1 = None
+    if para.get('cand1_enabled', False):
+        mu = np.array(para['cand1_mu'], dtype=np.float32)
+        sigma = np.array(para['cand1_sigma'], dtype=np.float32)
+        cand1 = {
+            'mu': torch.tensor(mu, dtype=torch.float32).view(1, 1, *mu.shape).to(device),
+            'sigma': torch.tensor(sigma, dtype=torch.float32).view(1, 1, *sigma.shape).to(device),
+            'A': float(para['cand1_A']),
+            'Z': float(para['cand1_Z']),
+        }
+
     return {
         'teacher': teacher.to(device),
         'student': student.to(device),
@@ -202,45 +215,29 @@ def load_model(model_dir, device='cpu', image_size_height=256, image_size_width=
         'q_ae_start': q_ae_start,
         'q_ae_end': q_ae_end,
         'channel_weights': channel_weights,
+        'height': img_h,
+        'width': img_w,
+        'st_para': para.get('st_para', 1.0),
+        'ae_para': para.get('ae_para', 0.0),
+        'cand1': cand1,
         'edge_mask_w': edge_mask_w,
         'para': para,
     }
 
 
-def _predict_st_only(image, teacher, student, teacher_mean, teacher_std,
-                     q_st_start, q_st_end, channel_weights=None):
-    """map_st のみを計算する（AE 無効時の高速パス）。
-
-    AE と Student の出力空間サイズが異なる場合 (56x120 vs 64x128) に
-    _predict が失敗するため、ae_para=0 のときはこちらを使う。
-    """
-    teacher_output = teacher(image)
-    teacher_output = (teacher_output - teacher_mean) / teacher_std
-    student_output = student(image)
-
-    diff_st = (teacher_output - student_output[:, :out_channels]) ** 2
-
-    if channel_weights is not None:
-        map_st = torch.sum(diff_st * channel_weights, dim=1, keepdim=True)
-    else:
-        map_st = torch.mean(diff_st, dim=1, keepdim=True)
-
-    if q_st_start is not None:
-        map_st = 0.1 * (map_st - q_st_start) / (q_st_end - q_st_start)
-
-    return map_st
-
-
-def score_images(model_dict, image_dir, filenames, st_para=1.0, ae_para=0.0,
+def score_images(model_dict, image_dir, filenames, st_para=None, ae_para=None,
                  device='cpu', edge_mask_w=None):
     """画像リストに対してスコアを算出する。
+
+    model.py の EfficientADFullModel が実際にデプロイされる際と同じ
+    utils.scoring_transform.compute_anomaly_score を使ってスコアを計算する。
 
     Args:
         model_dict: load_model の返り値
         image_dir: 画像が格納されたディレクトリ
         filenames: 画像ファイル名のリスト
-        st_para: map_st の重み
-        ae_para: map_ae の重み
+        st_para: map_st の重み。None なら model_dict['st_para'] (= para.json 由来) を使用。
+        ae_para: map_ae の重み。None なら model_dict['ae_para'] (= para.json 由来) を使用。
         edge_mask_w: anomaly map 両端 N 列を 0 化してから max (PDN padding artifact 抑制)。
             None なら model_dict['edge_mask_w'] (= para.json 由来) を使用、明示指定で上書き可。
 
@@ -254,50 +251,44 @@ def score_images(model_dict, image_dir, filenames, st_para=1.0, ae_para=0.0,
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
+    if st_para is None:
+        st_para = model_dict.get('st_para', 1.0)
+    if ae_para is None:
+        ae_para = model_dict.get('ae_para', 0.0)
     if edge_mask_w is None:
         edge_mask_w = int(model_dict.get('edge_mask_w', 0))
     else:
         edge_mask_w = int(edge_mask_w)
 
-    st_only = (ae_para == 0.0)
+    cand1 = model_dict.get('cand1')
+
     scores = {}
     for fname in tqdm(filenames, desc=f'Scoring {os.path.basename(image_dir)}'):
         path = os.path.join(image_dir, fname)
         image = Image.open(path).convert('RGB')
         image_t = tf(image).unsqueeze(0).to(device)
 
-        if st_only:
-            with torch.no_grad():
-                map_st = _predict_st_only(
-                    image=image_t,
-                    teacher=model_dict['teacher'],
-                    student=model_dict['student'],
-                    teacher_mean=model_dict['teacher_mean'],
-                    teacher_std=model_dict['teacher_std'],
-                    q_st_start=model_dict['q_st_start'],
-                    q_st_end=model_dict['q_st_end'],
-                    channel_weights=model_dict['channel_weights'],
-                )
-            anomaly_map = st_para * map_st
-        else:
-            map_combined, _, _ = _predict(
-                image=image_t,
-                teacher=model_dict['teacher'],
-                student=model_dict['student'],
-                autoencoder=model_dict['autoencoder'],
-                teacher_mean=model_dict['teacher_mean'],
-                teacher_std=model_dict['teacher_std'],
-                st_para=st_para,
-                ae_para=ae_para,
+        with torch.no_grad():
+            score_t = compute_anomaly_score(
+                image_t,
+                model_dict['teacher'],
+                model_dict['student'],
+                model_dict['autoencoder'],
+                model_dict['teacher_mean'],
+                model_dict['teacher_std'],
+                st_para,
+                ae_para,
                 q_st_start=model_dict['q_st_start'],
                 q_st_end=model_dict['q_st_end'],
                 q_ae_start=model_dict['q_ae_start'],
                 q_ae_end=model_dict['q_ae_end'],
                 channel_weights=model_dict['channel_weights'],
+                edge_mask_w=edge_mask_w,
+                cand1=cand1,
+                height=model_dict['height'],
+                width=model_dict['width'],
             )
-            anomaly_map = map_combined
-
-        scores[fname] = compute_image_score(anomaly_map, edge_mask_w=edge_mask_w)
+        scores[fname] = float(score_t.item())
 
     return scores
 
