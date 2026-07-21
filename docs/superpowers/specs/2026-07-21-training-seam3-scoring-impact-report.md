@@ -15,5 +15,15 @@ ADR-6(evaluationとdeployのスコアリング実装重複の統合)実施によ
 既存の閾値(para.jsonのthreshold)は`find_optimal_threshold`で評価時に
 再計算されるため、この点は自動的に追随する。
 
+実際に影響を受ける呼び出し経路は`training/evaluation/evaluator.py`の
+`Evaluator.evaluate()`である(`training/pipline.py`の学習パイプライン実行中に
+生成・呼び出される)。この経路は`score_images(model_dict, test_good, good_files)`を
+`st_para`/`ae_para`引数無しで呼んでいるため、今回のデフォルト値変更
+(決め打ちの`1.0`/`0.0` → `None`、`None`時は`model_dict`のpara.json由来の値を使用)の
+影響を直接受ける。`ae_para>0`のモデルや、cand1有効なmonochroモデル(本番の全monochroモデル)
+では、学習パイプライン実行中に記録されるAUC/F1/miss_rate/false_alarm_rateが実際に変わる。
+(`evaluation.scoring.evaluate_model()`は`training/`配下のどこからも呼ばれていないdead codeで
+あり、本Task2の挙動変更が実運用に与える影響を判断する根拠にはならない。)
+
 設計書(`docs/superpowers/specs/2026-07-21-training-modular-monolith-migration-design.md`)
 §5で事前承認済みの挙動変更に対応する実測レポート。
