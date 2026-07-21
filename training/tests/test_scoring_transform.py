@@ -98,6 +98,29 @@ def test_compute_anomaly_score_matches_reference_config_b(synthetic_scoring_comp
     assert torch.allclose(actual, expected)
 
 
+def test_compute_anomaly_score_matches_reference_config_d_channel_weights_and_edge_mask(
+        synthetic_scoring_components):
+    """config D: channel_weights指定 + edge_mask_w>0 (color本番構成の実際の分岐)。"""
+    from utils.scoring_transform import compute_anomaly_score
+
+    c = synthetic_scoring_components()
+    torch.manual_seed(2)
+    channel_weights = torch.rand(1, 384, 1, 1)
+
+    kwargs = dict(
+        x=c['image_norm'], teacher=c['teacher'], student=c['student'],
+        autoencoder=c['autoencoder'], teacher_mean=c['teacher_mean'],
+        teacher_std=c['teacher_std'], st_para=1.0, ae_para=0.0,
+        q_st_start=c['q_st_start'], q_st_end=c['q_st_end'],
+        q_ae_start=c['q_ae_start'], q_ae_end=c['q_ae_end'],
+        channel_weights=channel_weights, edge_mask_w=2, cand1=None,
+        height=c['height'], width=c['width'],
+    )
+    expected = _reference_compute(**kwargs)
+    actual = compute_anomaly_score(**kwargs)
+    assert torch.allclose(actual, expected)
+
+
 def test_compute_anomaly_score_matches_reference_config_c(synthetic_scoring_components):
     """config C: monochro相当、cand1有効 (現状本番の全monochroモデルの構成)。"""
     from utils.scoring_transform import compute_anomaly_score

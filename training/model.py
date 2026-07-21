@@ -6,7 +6,6 @@ import torch.nn as nn
 from torchvision import transforms
 
 from utils.common import get_autoencoder, get_pdn_small
-from utils.edge_mask import apply_edge_mask_zero
 from utils.scoring_transform import compute_anomaly_score
 
 
