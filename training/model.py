@@ -7,6 +7,7 @@ from torchvision import transforms
 
 from utils.common import get_autoencoder, get_pdn_small
 from utils.edge_mask import apply_edge_mask_zero
+from utils.scoring_transform import compute_anomaly_score
 
 
 class EfficientADFullModel(torch.nn.Module):
@@ -95,55 +96,26 @@ class EfficientADFullModel(torch.nn.Module):
         x = x / 255.0
         x = (x - self.mean) / self.std
 
-        teacher_output = self.teacher(x)
-        teacher_output = (teacher_output - self.teacher_mean) / self.teacher_std
-        student_output = self.student(x)
-
-        # map_st: Teacher-Student 差異
-        diff_st = (teacher_output - student_output[:, :self.out_channels]) ** 2
-        if self.channel_weights is not None:
-            map_st = torch.sum(diff_st * self.channel_weights, dim=1, keepdim=True)
-        else:
-            map_st = torch.mean(diff_st, dim=1, keepdim=True)
-
-        # map_ae: AE無効 (ae_para=0) のときは計算しない
-        # AE出力(56x120) と Student出力(64x128) のサイズ不一致を回避
-        if self.ae_para > 0:
-            autoencoder_output = self.autoencoder(x)
-            map_ae = torch.mean(
-                (autoencoder_output - student_output[:, self.out_channels:]) ** 2,
-                dim=1, keepdim=True)
-        else:
-            map_ae = torch.zeros_like(map_st)
-
-        # quantile 正規化
-        if self.q_st_start is not None:
-            map_st = 0.1 * (map_st - self.q_st_start) / (self.q_st_end - self.q_st_start)
-        if self.q_ae_start is not None and self.ae_para > 0:
-            map_ae = 0.1 * (map_ae - self.q_ae_start) / (self.q_ae_end - self.q_ae_start)
-
-        map_combined = self.st_para * map_st + self.ae_para * map_ae
-
-        # PDN padding artifact 抑制: anomaly map レベル (pad/interpolate 前) で両端 N 列を 0 化。
-        # 学習側 (train_func_color.py) の slice_edge_excluded と対称適用。
-        edge_w = int(self.edge_mask_w)
-        if edge_w > 0:
-            map_combined = apply_edge_mask_zero(map_combined, edge_w)
-
-        # 候補1 (monochro 専用): 56x120 の map_combined で raw/z を算出し統合スコアを返す。
-        # raw=max(map_combined), z=max((map_combined-μ)/σ), unified=max(raw/A, z/Z)。
+        cand1 = None
         if self.cand1_enabled:
-            raw = torch.max(torch.max(map_combined, dim=3)[0], dim=2)[0]          # (B,1)
-            zmap = (map_combined - self.cand1_mu) / (self.cand1_sigma + 1e-6)
-            zval = torch.max(torch.max(zmap, dim=3)[0], dim=2)[0]                 # (B,1)
-            return torch.maximum(raw / self.cand1_A, zval / self.cand1_Z)        # (B,1)
+            cand1 = {
+                'mu': self.cand1_mu,
+                'sigma': self.cand1_sigma,
+                'A': self.cand1_A,
+                'Z': self.cand1_Z,
+            }
 
-        map_combined = torch.nn.functional.pad(map_combined, (4, 4, 4, 4))
-        map_combined = torch.nn.functional.interpolate(
-            map_combined, (self.height, self.width), mode='bilinear')
-
-        output = torch.max(torch.max(map_combined, dim=3)[0], dim=2)[0]
-        return output
+        return compute_anomaly_score(
+            x, self.teacher, self.student, self.autoencoder,
+            self.teacher_mean, self.teacher_std,
+            self.st_para, self.ae_para,
+            q_st_start=self.q_st_start, q_st_end=self.q_st_end,
+            q_ae_start=self.q_ae_start, q_ae_end=self.q_ae_end,
+            channel_weights=self.channel_weights,
+            edge_mask_w=int(self.edge_mask_w),
+            cand1=cand1,
+            height=self.height, width=self.width,
+        )
 
 
 def load_para(para_path, device='cpu'):
