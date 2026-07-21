@@ -24,7 +24,6 @@ from utils.mlflow_logger import MLflowManager
 from utils.log_tailer import LogTailer
 from train_func_monochro import train_monochro
 from train_func_color import train_color
-from model_exporter import ModelExporter
 from model_handler import ONNXModelHandler
 import deploy
 from evaluation import Evaluator
@@ -617,8 +616,7 @@ class TrainingPipeline:
         skip_upload = self.cfg.common.get("skip_upload", False)
         for sub_mode in ["monochro", "color"]:
             sub_cfg = build_sub_cfg(self.cfg, sub_mode, gpu_id=0)
-            exporter = ModelExporter(sub_cfg)
-            exporter.export_onnx()
+            deploy.export_model(sub_cfg)
 
             mgr = mgr_color if sub_mode == "color" else mgr_monochro
             ev = Evaluator(self.cfg, color, mode=sub_mode, mgr=mgr)

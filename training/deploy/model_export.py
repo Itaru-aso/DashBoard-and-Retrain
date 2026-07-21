@@ -185,7 +185,20 @@ class ModelExporter:
         return onnx_path
 
 
+def export_model(cfg: DictConfig) -> str:
+    """学習済みモデルをONNX形式でエクスポートする（deployステージの公開API）。
+
+    Args:
+        cfg: build_sub_cfg() が返すflatなsub_cfg
+            (model_dir/target_color/mode/image_size_height/image_size_width等を含む)
+
+    Returns:
+        エクスポートしたONNXファイルのパス
+    """
+    return ModelExporter(cfg).export_onnx()
+
+
 if __name__ == '__main__':
-    cfg: DictConfig = OmegaConf.load("./conf/config.yaml")
+    cfg: DictConfig = OmegaConf.load('./conf/config.yaml')
     exporter: ModelExporter = ModelExporter(cfg)
     exporter.export_onnx()

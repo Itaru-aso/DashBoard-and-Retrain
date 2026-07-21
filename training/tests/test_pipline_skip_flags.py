@@ -7,8 +7,10 @@
 
 Seam1移行（training/deploy境界化）により、アップロードは
 `pipline.ftp_manager.upload_onnx_model()` ではなく `deploy.upload_model(...)` 経由になった。
-本テストのパッチ対象もそれに合わせて `pipline.deploy.upload_model` に付け替えている
-（検証する意図＝skip_upload時にアップロードが呼ばれないこと、は変更していない）。
+Seam4移行（training/deploy境界化・model_export）により、ONNXエクスポートも
+`pipline.ModelExporter(...)` ではなく `deploy.export_model(...)` 経由になった。
+本テストのパッチ対象もそれに合わせて `pipline.deploy.upload_model` / `pipline.deploy.export_model`
+に付け替えている（検証する意図＝skip_upload時にアップロードが呼ばれないこと、は変更していない）。
 
 実行: cd training && python -m pytest tests/test_pipline_skip_flags.py
 """
@@ -48,7 +50,7 @@ def _run(pipe):
     # 学習・ONNX エクスポート・評価・deployアップロードは task0 の対象外。実行を無害化する。
     with patch.object(pipline, "run_trainer"), patch.object(
         pipline, "build_sub_cfg", return_value=OmegaConf.create({})
-    ), patch.object(pipline, "ModelExporter"), patch.object(pipline, "Evaluator"), patch.object(
+    ), patch.object(pipline.deploy, "export_model"), patch.object(pipline, "Evaluator"), patch.object(
         pipline.deploy, "upload_model"
     ) as mock_upload_model:
         pipe.execute()

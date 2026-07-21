@@ -16,7 +16,7 @@ import torch
 from omegaconf import OmegaConf
 
 from model import EfficientADFullModel
-from model_exporter import ModelExporter
+from deploy.model_export import ModelExporter
 from utils.common import get_autoencoder, get_pdn_small
 
 OUT_CHANNELS = 384
