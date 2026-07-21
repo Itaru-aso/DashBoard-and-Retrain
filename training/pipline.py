@@ -17,7 +17,7 @@ from omegaconf import OmegaConf
 from ftplib import FTP
 import torch
 import cv2
-from utils.ftp_common import upload_file_to_ftp, download_ftp_selected, is_directory, AnnotationDownloader
+from utils.ftp_common import download_ftp_selected, is_directory, AnnotationDownloader
 from utils.image_preprocessing import load_image_as_byte_array, process_image
 from utils.split_manager import split_pool_to_train_test
 from utils.mlflow_logger import MLflowManager
@@ -26,6 +26,7 @@ from train_func_monochro import train_monochro
 from train_func_color import train_color
 from model_exporter import ModelExporter
 from model_handler import ONNXModelHandler
+import deploy
 
 
 def build_sub_cfg(cfg, mode, gpu_id=0):
@@ -316,7 +317,6 @@ class FTPManager:
         self.password = host_config.password
         self.monochro_port = host_config.monochro_port
         self.color_port = host_config.color_port
-        self.model_port = host_config.model_port
         self.local_root = cfg.common.ftp_common.local_root
 
     def download_images(self):
@@ -374,26 +374,6 @@ class FTPManager:
             except Exception:
                 pass
 
-    def upload_onnx_model(self):
-        """
-        再学習モデルのデプロイ
-        """
-        mode = self.cfg.common.mode
-        target_color = self.cfg.common.target_color
-        model_file_name = f"{target_color}_{mode}_model.onnx"
-        upload_path = os.path.join("./")
-        port = self.model_port
-        onnx_file_path = os.path.join(self.cfg.common.model_dir, str(target_color), mode, model_file_name)
-
-        upload_file_to_ftp(
-            host=self.host,
-            port=port,
-            username=self.username,
-            password=self.password,
-            local_file_path=onnx_file_path,
-            remote_folder=upload_path
-        )
-
 
 class MultiFTPManager:
     """複数検査PCへの一括FTP操作"""
@@ -415,15 +395,6 @@ class MultiFTPManager:
                 print(f"✅ [{mgr.name}] ダウンロード完了")
             except Exception as e:
                 print(f"⚠ [{mgr.name}] からのダウンロード失敗（スキップ）: {e}")
-
-    def upload_onnx_model(self):
-        for mgr in self.managers:
-            try:
-                print(f"📤 [{mgr.name}] へアップロード中...")
-                mgr.upload_onnx_model()
-                print(f"✅ [{mgr.name}] アップロード完了")
-            except Exception as e:
-                print(f"⚠ [{mgr.name}] へのアップロード失敗（スキップ）: {e}")
 
 
 class Trainer:
@@ -724,7 +695,7 @@ class TrainingPipeline:
             if skip_upload:
                 print(f"skip_upload=true: FTP アップロードをスキップ (mode={sub_mode})")
             else:
-                self.ftp_manager.upload_onnx_model()
+                deploy.upload_model(self.cfg, color, sub_mode)
 
         print("パイプライン完了")
 
