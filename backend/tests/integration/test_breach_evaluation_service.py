@@ -67,6 +67,86 @@ def test_breach_creates_task(db_session: Session) -> None:
 
 
 @pytest.mark.integration
+def test_no_task_when_value_equals_threshold(db_session: Session) -> None:
+    from src.repositories.daily_metrics_repository import DailyMetricsRepository
+    from src.repositories.task_repository import TaskRepository
+    from src.services.breach_evaluation_service import BreachEvaluationService
+
+    _metric_row(DailyMetricsRepository(db_session), D1, ng_count=1)  # ng_rate = 1/10 = 10%
+    _threshold(db_session, "ng_rate", 10.0)  # 閾値と厳密に一致（`>` のみ逸脱・`>=`ではない）
+
+    BreachEvaluationService(db_session).evaluate(window_days=1, end_date=D1)
+
+    assert TaskRepository(db_session).list() == []
+
+
+@pytest.mark.integration
+def test_false_alarm_rate_breach_creates_task(db_session: Session) -> None:
+    from src.repositories.daily_metrics_repository import DailyMetricsRepository
+    from src.repositories.task_repository import TaskRepository
+    from src.services.breach_evaluation_service import BreachEvaluationService
+
+    # false_alarm_rate = 1/10 = 10%（内訳: monochro由来0 + color由来1。全カメラ合算の確認）
+    _metric_row(DailyMetricsRepository(db_session), D1, fp_num=1, annotated_count=5)
+    _threshold(db_session, "false_alarm_rate", 5.0)
+
+    BreachEvaluationService(db_session).evaluate(window_days=1, end_date=D1)
+
+    tasks = TaskRepository(db_session).list()
+    assert len(tasks) == 1
+    assert tasks[0].task_type == "false_alarm_rate"
+    assert float(tasks[0].detected_value) == pytest.approx(10.0)
+    assert float(tasks[0].threshold_value) == pytest.approx(5.0)
+
+
+@pytest.mark.integration
+def test_false_alarm_rate_no_breach_no_task(db_session: Session) -> None:
+    from src.repositories.daily_metrics_repository import DailyMetricsRepository
+    from src.repositories.task_repository import TaskRepository
+    from src.services.breach_evaluation_service import BreachEvaluationService
+
+    _metric_row(DailyMetricsRepository(db_session), D1, fp_num=0, annotated_count=5)
+    _threshold(db_session, "false_alarm_rate", 5.0)
+
+    BreachEvaluationService(db_session).evaluate(window_days=1, end_date=D1)
+
+    assert TaskRepository(db_session).list() == []
+
+
+@pytest.mark.integration
+def test_miss_rate_breach_creates_task(db_session: Session) -> None:
+    from src.repositories.daily_metrics_repository import DailyMetricsRepository
+    from src.repositories.task_repository import TaskRepository
+    from src.services.breach_evaluation_service import BreachEvaluationService
+
+    # miss_rate = 1/10 = 10%（内訳: monochro由来1 + color由来0）
+    _metric_row(DailyMetricsRepository(db_session), D1, miss_num=1, annotated_count=5)
+    _threshold(db_session, "miss_rate", 5.0)
+
+    BreachEvaluationService(db_session).evaluate(window_days=1, end_date=D1)
+
+    tasks = TaskRepository(db_session).list()
+    assert len(tasks) == 1
+    assert tasks[0].task_type == "miss_rate"
+    assert float(tasks[0].detected_value) == pytest.approx(10.0)
+    assert float(tasks[0].threshold_value) == pytest.approx(5.0)
+
+
+@pytest.mark.integration
+def test_miss_rate_no_breach_no_task(db_session: Session) -> None:
+    from src.repositories.daily_metrics_repository import DailyMetricsRepository
+    from src.repositories.task_repository import TaskRepository
+    from src.services.breach_evaluation_service import BreachEvaluationService
+
+    _metric_row(DailyMetricsRepository(db_session), D1, miss_num=0, annotated_count=5)
+    _threshold(db_session, "miss_rate", 5.0)
+
+    BreachEvaluationService(db_session).evaluate(window_days=1, end_date=D1)
+
+    assert TaskRepository(db_session).list() == []
+
+
+@pytest.mark.integration
 def test_no_threshold_no_task(db_session: Session) -> None:
     from src.repositories.daily_metrics_repository import DailyMetricsRepository
     from src.repositories.task_repository import TaskRepository
