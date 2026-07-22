@@ -22,8 +22,7 @@ from utils.image_preprocessing import load_image_as_byte_array, process_image
 from utils.split_manager import split_pool_to_train_test
 from utils.mlflow_logger import MLflowManager
 from utils.log_tailer import LogTailer
-from train_func_monochro import train_monochro
-from train_func_color import train_color
+from train import train_color, train_monochro
 from model_handler import ONNXModelHandler
 import deploy
 from evaluation import Evaluator
