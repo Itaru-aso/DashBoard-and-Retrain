@@ -54,9 +54,9 @@ monochro:
   # 推論時は C# 側で crop x=485 固定で前処理されるが、学習時は raw 画像から
   # crop_offset_x = uniform(-crop_shift_max_px, +crop_shift_max_px) でランダムに
   # ずらして学習することで、再検証で観測された +14 px 程度のシフトに耐えるモデルを得る。
-  # raw_image_root 配下を {raw_image_root}/{target_color}/monochro/good/ で再帰探索する。
+  # マージンあり画像 (common.margin_export_root/common.dataset_id_monochro_margin) が
+  # 解決できた場合のみ適用し、見つからない場合は export_root（マージンなし）のみで学習する。
   use_raw_shift_dataset: true
-  raw_image_root: ./1_download
   crop_shift_max_px: 20
 
   num_workers: 8

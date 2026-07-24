@@ -148,10 +148,6 @@ class TrainingConfig:
                     f"common.dataset_path={self.data_root}/4_dataset",
                     f"common.backup_dir={self.data_root}/backup",
                     f"common.pool_base={self.data_root}/3_pool",
-                    # TODO(タスク16): export_root_margin 移行後の解決済みパスへ差し替える。
-                    # 現状は task13 で廃止済みの 1_download を指すため、data_root 使用時は
-                    # マージンあり学習が実質空振りになる（タスク16で解消）。
-                    f"monochro.raw_image_root={self.data_root}/1_download",
                 ]
             )
         return [

@@ -125,9 +125,10 @@ def test_build_command_overrides_data_paths_when_data_root_set(tmp_path: object)
     assert "common.dataset_path=/retrain_app_CW/4_dataset" in cmd
     assert "common.backup_dir=/retrain_app_CW/backup" in cmd
     assert "common.pool_base=/retrain_app_CW/3_pool" in cmd
-    assert "monochro.raw_image_root=/retrain_app_CW/1_download" in cmd
     # task13 で training/ 側の download_dir/staging_dir キーは廃止済み（override自体も送らない）。
     assert not any(c.startswith("common.download_dir=") for c in cmd)
+    # task16 で monochro.py が raw_image_root を読まなくなったため override自体も送らない。
+    assert not any(c.startswith("monochro.raw_image_root=") for c in cmd)
     assert not any(c.startswith("common.staging_dir=") for c in cmd)
 
 

@@ -11,12 +11,13 @@ color 版 (train_func_color.py) からの差分:
 """
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 import itertools
 import os
 import random
 import json
+from PIL import Image
 from tqdm import tqdm
 from torch.amp import GradScaler, autocast
 from utils.common import (get_autoencoder, get_pdn_small, get_pdn_medium,
@@ -96,6 +97,138 @@ def _resolve_teacher_weights_path(cfg) -> str:
     return os.path.join(pretraining_dir, fname)
 
 
+class _FlatGoodImageFolder(Dataset):
+    """サブフォルダ無しの画像ディレクトリを読む Dataset。
+
+    export_root（マージンなし・crop/top-bottom分割・リサイズ済み）由来の
+    `dataset_path/{color}/monochro/{train/good, test/good/images}` はクラス別
+    サブフォルダを持たないフラット構成のため、`ImageFolderWithoutTarget`
+    （torchvision `ImageFolder` 前提＝`root/{class}/*.jpg`）は使えない。
+    """
+
+    _EXTENSIONS = ('.bmp', '.png', '.jpg', '.jpeg', '.tiff')
+
+    def __init__(self, root, transform=None):
+        self.root = root
+        self.transform = transform
+        self.samples = sorted(
+            os.path.join(root, f) for f in os.listdir(root)
+            if f.lower().endswith(self._EXTENSIONS)
+        )
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, index):
+        image = Image.open(self.samples[index]).convert('RGB')
+        if self.transform is not None:
+            return self.transform(image)
+        return image
+
+
+def _resolve_margin_good_root(cfg, color_num: str) -> str | None:
+    """マージンあり画像（`export_root_margin`）の good カテゴリ画像ルートを解決する。
+
+    `dataset_id_monochro_margin` が空、または `metadata.json`/`binary` が見つからない
+    場合は None を返す（マージンなし学習へのフォールバック。決定16・17）。
+    on_class='0'（good）かつ invalid_flg!='1' のカテゴリのみ対象とし、monochro は
+    単一 good カテゴリを前提とする（複数見つかった場合は明確なエラーとする）。
+    """
+    margin_export_root = cfg.get('margin_export_root', '')
+    dataset_id = cfg.get('dataset_id_monochro_margin', '')
+    if not margin_export_root or not dataset_id:
+        return None
+
+    ds_dir = os.path.join(str(margin_export_root), str(dataset_id))
+    metadata_path = os.path.join(ds_dir, 'metadata.json')
+    if not os.path.isfile(metadata_path):
+        return None
+
+    with open(metadata_path, 'r', encoding='utf-8') as f:
+        metadata = json.load(f)
+    good_category_ids = [
+        c['category_id'] for c in metadata.get('category', [])
+        if c.get('on_class') == '0' and c.get('invalid_flg') != '1'
+    ]
+
+    binary_dir = os.path.join(ds_dir, 'binary', color_num)
+    good_dirs = [
+        os.path.join(binary_dir, cid) for cid in good_category_ids
+        if os.path.isdir(os.path.join(binary_dir, cid))
+    ]
+    if not good_dirs:
+        return None
+    if len(good_dirs) > 1:
+        raise ValueError(
+            f'マージンあり画像のgoodカテゴリが複数見つかりました: {good_dirs}'
+            '（monochroは単一goodカテゴリを前提としています）'
+        )
+    return good_dirs[0]
+
+
+def _build_datasets(
+    cfg, dataset_path: str, color_num: str, train_tf,
+    use_raw_shift: bool, crop_shift_max_px: int,
+    image_size_width: int, image_size_height: int, seed: int,
+):
+    """train/validation/full_train の Dataset を構築する（DataLoader構築部分）。
+
+    `use_raw_shift=True`（monochro専用のシフトaugmentation）の場合:
+        train = マージンありgood画像全量（見つかった場合。±crop_shift_max_pxランダムシフト）
+                + export_root（マージンなし）good画像のtrain分（シフトなし）
+        val   = export_root（マージンなし）good画像のtest分のみ
+                （推論時と同一クロップのため直接使える。マージンあり側にtrain/test分割は無い＝全量train）
+        マージンあり画像が見つからない場合は export_root のみで学習を継続する（非致命的フォールバック）。
+        defectカテゴリの画像はいずれの経路にも含まれない（マージン側はgoodカテゴリのみ解決し、
+        exportRoot側もtrain/good・test/good/imagesのみを参照するため）。
+
+    `use_raw_shift=False` の場合は既存動作（`dataset_path/train`のrandom 80/20分割）を変更しない。
+
+    Returns:
+        (train_set, validation_set, full_train_set): full_train_set は学習ステップ数算出等
+        （train_step計算・ログ表示）に使う「学習に使う全データ」を指す。
+    """
+    if use_raw_shift:
+        tight_train_good = os.path.join(dataset_path, 'train', 'good')
+        tight_test_good = os.path.join(dataset_path, 'test', 'good', 'images')
+        tight_train_set = _FlatGoodImageFolder(tight_train_good, transform=train_tf)
+        validation_set = _FlatGoodImageFolder(tight_test_good, transform=train_tf)
+
+        margin_root = _resolve_margin_good_root(cfg, color_num)
+        if margin_root is not None:
+            print(
+                f'[raw_shift_dataset] マージンあり画像から random crop_offset '
+                f'(±{crop_shift_max_px} px) で学習: {margin_root}'
+            )
+            margin_train_set = RawShiftImageFolder(
+                raw_root=margin_root, mode='monochro',
+                image_size_width=image_size_width,
+                image_size_height=image_size_height,
+                crop_shift_max_px=crop_shift_max_px,
+                transform=train_tf,
+                seed=seed,
+            )
+            train_set = torch.utils.data.ConcatDataset([margin_train_set, tight_train_set])
+        else:
+            print(
+                '[raw_shift_dataset] マージンあり画像が見つからないため、'
+                'export_root（マージンなし）のみで学習します'
+            )
+            train_set = tight_train_set
+        # 後続コード (teacher_normalization, train_step 計算等) は len(full_train_set) を参照するため保持
+        full_train_set = train_set
+    else:
+        full_train_set = ImageFolderWithoutTarget(
+            os.path.join(dataset_path, 'train'),
+            transform=train_tf)
+        train_size = int(0.8 * len(full_train_set))
+        validation_size = len(full_train_set) - train_size
+        rng = torch.Generator().manual_seed(seed)
+        train_set, validation_set = torch.utils.data.random_split(
+            full_train_set, [train_size, validation_size], rng)
+    return train_set, validation_set, full_train_set
+
+
 def train_monochro(cfg: DictConfig, mgr=None):
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -155,50 +288,14 @@ def train_monochro(cfg: DictConfig, mgr=None):
     use_raw_shift = bool(cfg.get('use_raw_shift_dataset', False))
     crop_shift_max_px = int(cfg.get('crop_shift_max_px', 0))
 
-    if use_raw_shift:
-        raw_root_base = cfg.get('raw_image_root', cfg.get('download_dir', './1_download'))
-        raw_root = os.path.join(str(raw_root_base), color_num, monochro_subdir, 'good')
-        print(f'[raw_shift_dataset] raw 画像から random crop_offset (±{crop_shift_max_px} px) で学習: {raw_root}')
-        # train 用: ±crop_shift_max_px で random shift augment
-        train_full = RawShiftImageFolder(
-            raw_root=raw_root, mode='monochro',
-            image_size_width=image_size_width,
-            image_size_height=image_size_height,
-            crop_shift_max_px=crop_shift_max_px,
-            transform=train_tf,
-            seed=seed,
-        )
-        # validation 用: 同じ raw 画像、offset=0 固定 (C# 推論時と同じクロップ)。
-        # val_loss / map_normalization の quantile / threshold が augment ノイズを受けないようにする。
-        val_full = RawShiftImageFolder(
-            raw_root=raw_root, mode='monochro',
-            image_size_width=image_size_width,
-            image_size_height=image_size_height,
-            crop_shift_max_px=0,
-            transform=train_tf,
-            seed=seed,
-        )
-        assert len(train_full) == len(val_full), (
-            f'train_full ({len(train_full)}) と val_full ({len(val_full)}) のサイズが一致しません'
-        )
-        full_size = len(train_full)
-        train_size = int(0.8 * full_size)
-        validation_size = full_size - train_size
-        rng = torch.Generator().manual_seed(seed)
-        indices = torch.randperm(full_size, generator=rng).tolist()
-        train_set = torch.utils.data.Subset(train_full, indices[:train_size])
-        validation_set = torch.utils.data.Subset(val_full, indices[train_size:])
-        # 後続コード (teacher_normalization, train_step 計算等) は len(full_train_set) を参照するため保持
-        full_train_set = train_full
-    else:
-        full_train_set = ImageFolderWithoutTarget(
-            os.path.join(dataset_path, 'train'),
-            transform=train_tf)
-        train_size = int(0.8 * len(full_train_set))
-        validation_size = len(full_train_set) - train_size
-        rng = torch.Generator().manual_seed(seed)
-        train_set, validation_set = torch.utils.data.random_split(
-            full_train_set, [train_size, validation_size], rng)
+    train_set, validation_set, full_train_set = _build_datasets(
+        cfg, dataset_path, color_num, train_tf,
+        use_raw_shift=use_raw_shift,
+        crop_shift_max_px=crop_shift_max_px,
+        image_size_width=image_size_width,
+        image_size_height=image_size_height,
+        seed=seed,
+    )
 
     _nw = int(cfg.get('num_workers', 4))
     _pw = bool(cfg.get('persistent_workers', False)) and _nw > 0
@@ -460,8 +557,8 @@ def train_monochro(cfg: DictConfig, mgr=None):
     # raw_shift モード時: teacher_mean/std を推論時分布 (shift=0) で再計算して上書きする。
     # 学習中は augment 込みの統計だったが、channel_weights / 最終 map_normalization /
     # threshold / para.json 保存は「推論時と同じ分布 (C# 側で読まれる値)」で揃えるべき。
-    # validation_loader は val_full (RawShiftImageFolder, shift_max=0) の subset なので
-    # 推論時相当の固定 offset で teacher の特徴量統計を取り直せる。
+    # validation_loader は export_root（マージンなし）の test/good（シフト無し・推論時と
+    # 同一クロップ）なので、そのままteacherの特徴量統計を取り直せる。
     if use_raw_shift:
         print('[teacher_renormalization] 推論時分布 (shift=0) で teacher_mean/std を再計算 (channel_weights / threshold 用)')
         teacher_mean, teacher_std = teacher_normalization(teacher, validation_loader)
@@ -472,9 +569,9 @@ def train_monochro(cfg: DictConfig, mgr=None):
     cw_cfg = cfg.get('channel_weights', None)
     if cw_cfg is not None and cw_cfg.get('enabled', False):
         # [データ依存関係 — monochro] channel_weights の入力ソース:
-        #   raw_shift=True  : good は 1_download の shift=0 クロップ (val_full) から取得し、
-        #                     defect は 3_pool→4_dataset split 済の 4_dataset/train/defect から。
-        #                     (good を 1_download に一本化したため 4_dataset/train/good は不要)
+        #   raw_shift=True  : good は export_root（マージンなし）の test/good（validation_set）
+        #                     から取得し、defect は 3_pool→4_dataset split 済の
+        #                     4_dataset/train/defect から。
         #   raw_shift=False : 従来どおり 4_dataset/train/{good,defect} から。
         # 不良は raw を上下2分割すると不良箇所の half が不明 → 2_staging 人手triage が必須で、
         # その成果 (3_pool/<color>/monochro/defect_pool→4_dataset/train/defect) だけが defect の供給源。
@@ -487,11 +584,11 @@ def train_monochro(cfg: DictConfig, mgr=None):
         train_path = os.path.join(dataset_path, 'train')
         cw_defect_path = os.path.join(train_path, 'defect')
         if use_raw_shift:
-            # good は 1_download 由来 (val_full: shift=0 のクロップ済テンソルを yield)。
+            # good は export_root（マージンなし）の test/good 由来 (validation_set)。
             # defect が無い場合 compute_channel_weights は unsupervised に degrade する。
             weights_np, cw_method, ch_aucs, w_sup = compute_channel_weights(
                 teacher, student, teacher_mean, teacher_std, None, device,
-                good_dataset=val_full, defect_path=cw_defect_path, **cw_kwargs)
+                good_dataset=validation_set, defect_path=cw_defect_path, **cw_kwargs)
         else:
             _cw_good = os.path.join(train_path, 'good')
             if not (os.path.isdir(_cw_good)

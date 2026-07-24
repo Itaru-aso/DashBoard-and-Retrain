@@ -203,17 +203,30 @@
     確認する`test_command_contains_expected_overrides`拡張、他4件新規）。
   - Refs: 決定6, 14, 24 ／ commit: `feat(training-service): size/chain/tapeをbuild_commandまで配線`
 
-- [ ] **16. `training/train/monochro.py`: マージンあり/なしDataLoader合体（monochro専用）**
-  - `use_raw_shift_dataset=true`時（155-192行）の`raw_image_root`参照先を`1_download`から
-    マージンありexportの解決済みパス（`export_root_margin`）に変更。`RawShiftImageFolder`
-    （`training/utils/raw_shift_dataset.py`）・`process_image`のcrop式自体は変更不要（未分割・生センサー座標系のため）。
-  - train = マージンありgood画像全量（±20pxランダムシフト） + export_root（マージンなし）goodのtrain分
-    （シフトなし）。val/test = export_root goodのtest分のみ（既存の「rawをoffset=0でクロップ」処理は不要）。
-  - 188行の`torch.randperm`独自分割を、製品ID単位グルーピング済みのexport_root test分への置き換えとして扱う
-    （`split_manager`の出力を使う新規利用）。
-  - defectカテゴリ（on_class=1）はmonochroのDataLoaderに一切含めない（マージン側・export_root側とも）。
-    colorのDataLoader構築・学習ロジック（good+defect二値分類）は変更しない。
-  - テスト（`training/tests/train/`・フィクスチャ）: 検証基準6・7・7b・10。
+- [x] **16. `training/train/monochro.py`: マージンあり/なしDataLoader合体（monochro専用）**
+  - `use_raw_shift_dataset=true`時の旧`raw_image_root`（`1_download`）参照を全面撤廃。新規ヘルパー
+    `_resolve_margin_good_root(cfg, color_num)`が`common.margin_export_root`/`dataset_id_monochro_margin`
+    からマージンあり画像の`binary/{color}/{good_category_id}/`を解決する（on_class='0'・invalid_flg!='1'の
+    カテゴリのみ、複数見つかった場合は明確なエラー、見つからない場合はNoneでフォールバック）。
+    `RawShiftImageFolder`・`process_image`のcrop式自体は変更なし（未分割・生センサー座標系のため）。
+  - 新規`_FlatGoodImageFolder`（サブフォルダ無しのフラット画像フォルダ用Dataset。`ImageFolderWithoutTarget`
+    はtorchvision`ImageFolder`前提＝クラスサブフォルダ必須のため使えない）でexport_root
+    （マージンなし）の`dataset_path/train/good`・`dataset_path/test/good/images`を読む。
+  - train = マージンありgood画像全量（見つかった場合。±crop_shift_max_pxランダムシフト）
+    + tight train（シフトなし）。val = tight testのみ（マージン混入なし）。旧`torch.randperm`独自
+    80/20分割は撤廃し、export_rootの既存train/test分（`split_pool_to_dataset`の出力）を使う置き換えとして扱った。
+  - defectカテゴリ（on_class=1）はmonochroのDataLoaderに一切含めない（マージン側はgoodカテゴリのみ解決、
+    export_root側もtrain/good・test/good/imagesのみ参照）。colorのDataLoader構築・学習ロジックは無変更
+    （`color.py`は今回未編集）。
+  - テスト容易化のため、データセット構築部分を`_build_datasets(...)`関数として抽出（DataLoader構築部分の
+    範囲内。損失関数・モデル構造・学習ループは touch していない）。`use_raw_shift=false`時の既存80/20分割は
+    ロジック無変更（バイト単位で移動のみ）。
+  - **付随修正**: `training/conf/config.yaml`の`monochro.raw_image_root`キー（誰も読まなくなった）を削除。
+    backendの`build_command`から対応する`monochro.raw_image_root=...`オーバーライド（タスク15のTODOで
+    暫定維持していたもの）も削除し、テストを更新。
+  - テスト（`training/tests/train/test_monochro_export_root_margin.py`・フィクスチャ）: 検証基準6・7
+    （新規9テスト）。7b・10（color無変更）は既存colorテストのgreen維持で確認（training/フルスイート
+    49→58件、全パス）。
   - Refs: 決定15-20 ／ commit: `feat(training-monochro): マージンあり/なしデータのDataLoader合体`
 
 - [ ] **17. backend: ONNX保存パスのタプル管理（ステージング→最終パス移動）**
