@@ -243,9 +243,12 @@
     「backendが完了後に移動する」を安全に実装する上で必要と判断）。モジュールdocstringの
     「画像は別機能が1_downloadに事前配置」という記述もexport_root前提に更新。
   - テスト（`backend/tests/integration/test_training_service.py`）: 検証基準11（`final_onnx_path`の
-    tuple組み立て・tape空文字ケース、filesystem-onlyで実行確認済み）・12（完了処理のステージング→最終パス
-    移動＋同一タプル2回連続完了での上書き。DB依存のためこの環境では未実行、ロジックは既存DB依存テストの
-    パターンに準拠）。
+    tuple組み立て・tape空文字ケース）・12（完了処理のステージング→最終パス移動＋同一タプル2回連続完了
+    での上書き）ともに実行確認済み（Docker起動後、`test_training_service.py`全22件PASS。うち
+    `test_completion_promotes_onnx_to_final_tuple_path_and_overwrites_on_rerun`が検証基準12に対応）。
+    `deployment_service.deploy_job`は`job.onnx_monochro_path`/`onnx_color_path`（DB保存値）を読む実装
+    であることを確認済みのため、`mark_completed`に最終パスを渡す変更が自動配信フローと整合することも
+    確認済み。
   - Refs: 決定21, 22 ／ commit: `feat(training-service): ONNX保存パスのタプル管理`
 
 - [ ] **18.（保留・要確認待ち）エッジPC配信ファイル名のタプル化**
