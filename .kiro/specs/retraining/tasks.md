@@ -75,6 +75,8 @@
 - [x] **6. Service: `deployment_service`（配信・現行モデル・学習と分離）**
   - `deploy_job(job_id)`: COMPLETED の ONNX を有効エッジPC全台へ **ver2 自前 ftplib** で送信（`model_port`・
     リモート名は検査PC互換の **`{color_no}_{mode}_model.onnx`** を FTP ルート直下）→ `deployed_model` をフルタプルで upsert。
+    （**2026-07-24追記**: リモート名はタスク18で`{color_no}_{size}_{chain}_{tape}_{mode}_model.onnx`に変更済み。
+    本行の`{color_no}_{mode}_model.onnx`はタスク6時点の記述として保持）
     集約: 全台成功=SUCCESS／一部失敗=PARTIAL／全失敗=FAILED（再配信可・ジョブ成功は覆さない）。
   - v1 は `make_auto_deploy_hook` を `training_service.on_completed` に渡し **COMPLETED で自動配信**。
   - テスト（integration・**FTP フェイク注入**）: 全台成功 SUCCESS（送信数・色番名・model_port）／一部失敗 PARTIAL／全失敗 FAILED／
