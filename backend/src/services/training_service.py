@@ -109,18 +109,36 @@ class TrainingConfig:
         """
         return _find_dataset_id(self.margin_export_root, f"monochro_{size}_{chain}")
 
-    def build_command(self, color_no: str) -> list[str]:
+    def build_command(self, color_no: str, size: str, chain: str) -> list[str]:
         """起動コマンドを組み立てる（色番は文字列で渡す）。
 
         `common.model_dir` は `TRAINING_MODEL_DIR`（env）を単一の正として明示上書きする
         （config.yaml 側の既定値との二重管理・ズレを防ぐ）。`imagenet_train_path`・データ用
-        ディレクトリ一式（`data_root` 設定時）は env が設定されている場合のみ上書きする
-        （ローカル Windows と Docker でパス表現が異なるため）。
+        ディレクトリ一式（`data_root` 設定時）・`export_root`/`margin_export_root`から解決した
+        dataset_id（`(mode, size, chain)` 単位）は、いずれも**解決できた場合のみ**上書きする。
+        OmegaConf の dotlist override は `key=`（空値）を渡すと `None` になり config.yaml 側の
+        既定値（空文字）を上書きしてしまう（`os.path.join` に None を渡すと TypeError になる等、
+        空文字より扱いにくい）ため、見つからない場合はキー自体を送らず config.yaml の既定
+        （空文字）に委ねる。
         """
+        dataset_id_monochro = self.resolve_dataset_id("monochro", size, chain)
+        dataset_id_color = self.resolve_dataset_id("color", size, chain)
+        dataset_id_monochro_margin = self.resolve_margin_dataset_id(size, chain)
+
         overrides = [
             f"common.target_color={color_no}",
             f"common.model_dir={self.model_dir}",
         ]
+        if dataset_id_monochro:
+            overrides.append(f"common.dataset_id_monochro={dataset_id_monochro}")
+        if dataset_id_color:
+            overrides.append(f"common.dataset_id_color={dataset_id_color}")
+        if dataset_id_monochro_margin:
+            overrides.append(f"common.dataset_id_monochro_margin={dataset_id_monochro_margin}")
+        if self.export_root:
+            overrides.append(f"common.export_root={self.export_root}")
+        if self.margin_export_root:
+            overrides.append(f"common.margin_export_root={self.margin_export_root}")
         if self.imagenet_train_path:
             overrides.append(f"common.imagenet_train_path={self.imagenet_train_path}")
         if self.data_root:
@@ -129,9 +147,10 @@ class TrainingConfig:
                     f"common.pretraining_dir={self.data_root}/0_pretraining",
                     f"common.dataset_path={self.data_root}/4_dataset",
                     f"common.backup_dir={self.data_root}/backup",
-                    f"common.download_dir={self.data_root}/1_download",
                     f"common.pool_base={self.data_root}/3_pool",
-                    f"common.staging_dir={self.data_root}/2_staging",
+                    # TODO(タスク16): export_root_margin 移行後の解決済みパスへ差し替える。
+                    # 現状は task13 で廃止済みの 1_download を指すため、data_root 使用時は
+                    # マージンあり学習が実質空振りになる（タスク16で解消）。
                     f"monochro.raw_image_root={self.data_root}/1_download",
                 ]
             )
@@ -336,12 +355,16 @@ class TrainingService:
         tup = await asyncio.to_thread(self._db_get_tuple, job_id)
         if tup is None:
             return
-        color_no, _size, _chain, _tape = tup
+        # tape はここでは CLI override に使わない（dataset_id 解決の name 規約に含まれない）が、
+        # 完了後の ONNX パス解決（タスク17）・配信ファイル名解決（タスク18・保留）に使うため保持する。
+        color_no, size, chain, tape = tup
 
         await asyncio.to_thread(self._db_mark_running, job_id)
-        self._hub.publish(job_id, f"[STATUS] RUNNING color={color_no}")
+        self._hub.publish(
+            job_id, f"[STATUS] RUNNING color={color_no} size={size} chain={chain} tape={tape}"
+        )
 
-        cmd = self._cfg.build_command(color_no)
+        cmd = self._cfg.build_command(color_no, size, chain)
         self._hub.publish(job_id, f"[CMD] (cwd={self._cfg.training_dir}) {' '.join(cmd)}")
 
         saw_completion = False

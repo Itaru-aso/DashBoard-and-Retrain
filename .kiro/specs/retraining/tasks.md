@@ -182,16 +182,25 @@
     （main/marginのdataset_id解決・マージン側が見つからない場合の空文字フォールバック）。
   - Refs: 決定4, 5, 13 ／ commit: `feat(training-service): export_root/export_root_marginのdataset_id解決を追加`
 
-- [ ] **15. backend: `_run_job`/`build_command`のCLI override配線（size/chain/tape配線）**
+- [x] **15. backend: `_run_job`/`build_command`のCLI override配線（size/chain/tape配線）**
   - **既存タスクとの関係**: タスク5（`[x]`完了済み）は学習起動に`common.target_color`（color_noのみ）を渡す
     設計だったが、本タスクでsize/chain/tapeも渡すよう配線を追加する（タスク5の起動コマンド構築を拡張）。
-  - `training_service.py:295`の`_run_job`が`_size`/`_chain`/`_tape`として捨てているsize/chain/tapeを
-    `build_command`まで配線し直す。
-  - `build_command`が解決済みdataset_id・export_rootパスを`common.export_root`/`common.dataset_id_monochro`/
-    `common.dataset_id_color`/`common.margin_export_root`/`common.dataset_id_monochro_margin`のCLI override
-    として正しく組み立てるようにする。`tape`は完了後のONNXパス解決（タスク17）・配信ファイル名解決
-    （タスク18・保留）に使うため保持する。
-  - テスト（`backend/tests/integration/test_training_service.py`）: 検証基準5。
+  - `_run_job`が`_size`/`_chain`/`_tape`として捨てていたsize/chain/tapeを`color_no, size, chain, tape = tup`に
+    変更。`tape`はCLI overrideには使わない（dataset_id解決のname規約に含まれない）が、`[STATUS] RUNNING`
+    ログ行に含める形で保持し、完了後のONNXパス解決（タスク17）・配信ファイル名解決（タスク18・保留）に
+    引き続き使えるようにした。
+  - `build_command(color_no, size, chain)`に署名変更。`resolve_dataset_id`/`resolve_margin_dataset_id`
+    （タスク14で実装済み）を呼び、`common.dataset_id_monochro`/`common.dataset_id_color`/
+    `common.dataset_id_monochro_margin`・`common.export_root`/`common.margin_export_root`のいずれも
+    **解決/設定できた場合のみ**付与する（`key=`空値はOmegaConfで`None`になりconfig.yaml側の空文字既定を
+    上書きしてしまうため。advisorレビューで発見・`OmegaConf.from_dotlist(['x='])`で実測確認）。
+  - **付随修正**: `data_root`設定時のオーバーライドから、タスク13で廃止済みの`common.download_dir`/
+    `common.staging_dir`を削除（送っても実害はないが死んだキーなので整理）。`monochro.raw_image_root`は
+    現状`{data_root}/1_download`のまま維持（タスク16で`export_root_margin`の解決済みパスに差し替えるまでの
+    暫定。TODOコメントを付記）。
+  - テスト（`backend/tests/integration/test_training_service.py`）: 検証基準5
+    （dataset_id override省略/付与の条件分岐・export_root系の条件付与・DB取得size/chainからの配線を
+    確認する`test_command_contains_expected_overrides`拡張、他4件新規）。
   - Refs: 決定6, 14, 24 ／ commit: `feat(training-service): size/chain/tapeをbuild_commandまで配線`
 
 - [ ] **16. `training/train/monochro.py`: マージンあり/なしDataLoader合体（monochro専用）**

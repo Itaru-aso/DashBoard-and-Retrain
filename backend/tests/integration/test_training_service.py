@@ -99,14 +99,14 @@ def _cfg(tmp_path: object):
 @pytest.mark.integration
 def test_build_command_omits_imagenet_override_when_unset(tmp_path: object) -> None:
     cfg = _cfg(tmp_path)
-    cmd = cfg.build_command("501")
+    cmd = cfg.build_command("501", "5", "YY")
     assert not any(c.startswith("common.imagenet_train_path=") for c in cmd)
 
 
 @pytest.mark.integration
 def test_build_command_omits_data_root_overrides_when_unset(tmp_path: object) -> None:
     cfg = _cfg(tmp_path)
-    cmd = cfg.build_command("501")
+    cmd = cfg.build_command("501", "5", "YY")
     assert not any(c.startswith("common.pool_base=") for c in cmd)
 
 
@@ -120,14 +120,15 @@ def test_build_command_overrides_data_paths_when_data_root_set(tmp_path: object)
         python_executable="python",
         data_root="/retrain_app_CW",
     )
-    cmd = cfg.build_command("501")
+    cmd = cfg.build_command("501", "5", "YY")
     assert "common.pretraining_dir=/retrain_app_CW/0_pretraining" in cmd
     assert "common.dataset_path=/retrain_app_CW/4_dataset" in cmd
     assert "common.backup_dir=/retrain_app_CW/backup" in cmd
-    assert "common.download_dir=/retrain_app_CW/1_download" in cmd
     assert "common.pool_base=/retrain_app_CW/3_pool" in cmd
-    assert "common.staging_dir=/retrain_app_CW/2_staging" in cmd
     assert "monochro.raw_image_root=/retrain_app_CW/1_download" in cmd
+    # task13 で training/ 側の download_dir/staging_dir キーは廃止済み（override自体も送らない）。
+    assert not any(c.startswith("common.download_dir=") for c in cmd)
+    assert not any(c.startswith("common.staging_dir=") for c in cmd)
 
 
 @pytest.mark.integration
@@ -140,8 +141,55 @@ def test_build_command_overrides_imagenet_when_set(tmp_path: object) -> None:
         python_executable="python",
         imagenet_train_path="/imagenet/train",
     )
-    cmd = cfg.build_command("501")
+    cmd = cfg.build_command("501", "5", "YY")
     assert "common.imagenet_train_path=/imagenet/train" in cmd
+
+
+@pytest.mark.integration
+def test_build_command_omits_dataset_id_overrides_when_not_found() -> None:
+    """dataset_idが解決できない場合はoverride自体を送らない（空値=Noneでconfig.yaml側の
+    既定（空文字）を上書きしてしまうのを避ける）。"""
+    from src.services.training_service import TrainingConfig
+
+    cfg = TrainingConfig(training_dir="/x", model_dir="/x/6_model", python_executable="python")
+    cmd = cfg.build_command("501", "5", "YY")
+    assert not any(c.startswith("common.dataset_id_monochro=") for c in cmd)
+    assert not any(c.startswith("common.dataset_id_color=") for c in cmd)
+    assert not any(c.startswith("common.dataset_id_monochro_margin=") for c in cmd)
+
+
+@pytest.mark.integration
+def test_build_command_wires_export_root_and_dataset_ids(tmp_path: object) -> None:
+    """検証基準5: export_root/margin_export_rootが設定されている場合の一連の配線を確認する。"""
+    from src.services.training_service import TrainingConfig
+
+    export_root = os.path.join(str(tmp_path), "export_root")
+    margin_root = os.path.join(str(tmp_path), "export_root_margin")
+    _write_dataset_metadata(export_root, "ds-mono-1", "monochro_5_YY")
+    _write_dataset_metadata(export_root, "ds-color-1", "color_5_YY")
+    _write_dataset_metadata(margin_root, "ds-margin-1", "monochro_5_YY")
+
+    cfg = TrainingConfig(
+        training_dir=str(tmp_path),
+        model_dir=os.path.join(str(tmp_path), "6_model"),
+        python_executable="python",
+        export_root=export_root,
+        margin_export_root=margin_root,
+    )
+    cmd = cfg.build_command("501", "5", "YY")
+    assert f"common.export_root={export_root}" in cmd
+    assert f"common.margin_export_root={margin_root}" in cmd
+    assert "common.dataset_id_monochro=ds-mono-1" in cmd
+    assert "common.dataset_id_color=ds-color-1" in cmd
+    assert "common.dataset_id_monochro_margin=ds-margin-1" in cmd
+
+
+@pytest.mark.integration
+def test_build_command_omits_export_root_overrides_when_unset(tmp_path: object) -> None:
+    cfg = _cfg(tmp_path)
+    cmd = cfg.build_command("501", "5", "YY")
+    assert not any(c.startswith("common.export_root=") for c in cmd)
+    assert not any(c.startswith("common.margin_export_root=") for c in cmd)
 
 
 def _write_dataset_metadata(export_root: object, dataset_id: str, name: str) -> None:
@@ -411,6 +459,12 @@ def test_command_contains_expected_overrides(monkeypatch, tmp_path, session_fact
     assert "common.skip_download=true" in cmd
     assert "common.skip_upload=true" in cmd
     assert "mlflow.enabled=false" in cmd
+    # 検証基準5: export_root未設定（=解決不能）時はdataset_id override自体を送らないこと
+    # （DBから取得したsize="05"/chain="CZT8"はresolve_dataset_idに渡るがcfg.export_root=""のため
+    # 解決結果は空文字になり、override自体が省略される）。
+    assert "common.dataset_id_monochro=" not in cmd
+    assert "common.dataset_id_color=" not in cmd
+    assert "common.dataset_id_monochro_margin=" not in cmd
     assert captured["cwd"] == cfg.training_dir
     assert captured["start_new_session"] is True  # プロセスグループ化
 
