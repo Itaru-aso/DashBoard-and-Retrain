@@ -229,16 +229,23 @@
     49→58件、全パス）。
   - Refs: 決定15-20 ／ commit: `feat(training-monochro): マージンあり/なしデータのDataLoader合体`
 
-- [ ] **17. backend: ONNX保存パスのタプル管理（ステージング→最終パス移動）**
-  - `training_service.py`の`TrainingConfig.onnx_path(color_no, mode)`（64-66行、学習側ステージング出力先）は
-    不変のまま、`(color_no, size, chain, tape, mode)`から最終パス
+- [x] **17. backend: ONNX保存パスのタプル管理（ステージング→最終パス移動）**
+  - `TrainingConfig.onnx_path(color_no, mode)`（学習側ステージング出力先）は不変のまま、新規
+    `TrainingConfig.final_onnx_path(color_no, size, chain, tape, mode)`が最終パス
     `model_dir/{color_no}/{size}_{chain}_{tape}/{mode}/{color_no}_{size}_{chain}_{tape}_{mode}_model.onnx`
-    （tape空文字は空文字のまま連結）を組み立てる処理を追加。
-  - `_run_job`の完了判定後、ステージングパスから最終パスへファイルを移動し、`mark_completed(job_id, ...)`には
-    移動後の最終パスを渡す（タプル単位で最新のみ保持・同タプルの既存ファイルは上書き）。`training/`側
-    （`deploy/model_export.py`）は変更しない。
-  - テスト（`backend/tests/integration/test_training_service.py`）: 検証基準11・12（同一タプル2回連続完了で
-    2回目が1回目を正しく上書き）。
+    を組み立てる（tape空文字は空文字のまま連結・プレースホルダなし）。
+  - `_run_job`の完了判定後、`TrainingService._promote_onnx`（`shutil.move`+`os.makedirs`）がステージング
+    パスから最終パスへファイルを移動し、`mark_completed(job_id, ...)`には移動後の最終パスを渡す
+    （タプル単位で最新のみ保持・同タプルの既存ファイルは上書き）。`training/`側（`deploy/model_export.py`）
+    は変更しない。
+  - **付随修正**: 移動失敗時（`OSError`）はFAILEDとして記録する（training自体は成功していても、
+    タプル別最終パスへの配置が失敗した場合はジョブとして未完了とみなす。ADRに明示はないが決定22の
+    「backendが完了後に移動する」を安全に実装する上で必要と判断）。モジュールdocstringの
+    「画像は別機能が1_downloadに事前配置」という記述もexport_root前提に更新。
+  - テスト（`backend/tests/integration/test_training_service.py`）: 検証基準11（`final_onnx_path`の
+    tuple組み立て・tape空文字ケース、filesystem-onlyで実行確認済み）・12（完了処理のステージング→最終パス
+    移動＋同一タプル2回連続完了での上書き。DB依存のためこの環境では未実行、ロジックは既存DB依存テストの
+    パターンに準拠）。
   - Refs: 決定21, 22 ／ commit: `feat(training-service): ONNX保存パスのタプル管理`
 
 - [ ] **18.（保留・要確認待ち）エッジPC配信ファイル名のタプル化**

@@ -4,10 +4,13 @@
 - in-process の asyncio キュー＋**単一ワーカ**で **FIFO・同時1本**に実行（`uvicorn --workers 1` 前提）。
 - 起動: `python pipline.py common.target_color=<color_no> common.pipeline_mode=train
   common.skip_download=true common.skip_upload=true color.mlflow.enabled=false
-  monochro.mlflow.enabled=false` を `training/` を CWD に。画像は別機能が `1_download`
-  に事前配置。配信は deployment_service。
+  monochro.mlflow.enabled=false` を `training/` を CWD に。画像は別機能が生成する
+  `export_root`（dataset_idはbackendが解決してCLI overrideで渡す）から取得。配信は
+  deployment_service。
 - 進捗: subprocess の標準出力を**1行ずつ素通し**で WebSocket 購読者へ配信（揮発）。
 - 成功判定: **終了コードに依存しない**。両 mode の ONNX 生成有無＋標準出力の `パイプライン完了` マーカー。
+- 完了時: ステージング出力先（training/固定パス）からフルタプル別の最終パスへ ONNX を移動する
+  （タプル単位で最新のみ保持）。
 - キャンセル: QUEUED はキューから除外。RUNNING は**プロセスグループごと kill**（spawn 子も含めて停止）。
 - 状態は DB を正として都度永続（`RetrainingRepository`）。
 
@@ -21,6 +24,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import signal
 from collections import deque
 from contextlib import contextmanager
@@ -90,8 +94,21 @@ class TrainingConfig:
     )
 
     def onnx_path(self, color_no: str, mode: str) -> str:
-        """成果物 ONNX パス: model_dir/<color>/<mode>/<color>_<mode>_model.onnx（mode=monochro/color）。"""
+        """学習側ステージング出力先（training/ 側は不変・タプル非依存・複数ジョブで使い回す）。
+
+        model_dir/<color>/<mode>/<color>_<mode>_model.onnx（mode=monochro/color）。
+        """
         return os.path.join(self.model_dir, color_no, mode, f"{color_no}_{mode}_model.onnx")
+
+    def final_onnx_path(self, color_no: str, size: str, chain: str, tape: str, mode: str) -> str:
+        """完了後にステージングパスから移動する最終 ONNX パス（フルタプル単位で最新のみ保持）。
+
+        `model_dir/{color_no}/{size}_{chain}_{tape}/{mode}/{color_no}_{size}_{chain}_{tape}_{mode}_model.onnx`。
+        `tape` が空文字の場合は空文字のまま連結する（決定22。特別なプレースホルダは使わない）。
+        """
+        tuple_dir = f"{size}_{chain}_{tape}"
+        filename = f"{color_no}_{size}_{chain}_{tape}_{mode}_model.onnx"
+        return os.path.join(self.model_dir, color_no, tuple_dir, mode, filename)
 
     def resolve_dataset_id(self, mode: str, size: str, chain: str) -> str:
         """`export_root` から `(mode, size, chain)` に対応する dataset_id を解決する。
@@ -400,7 +417,20 @@ class TrainingService:
         onnx_ok = os.path.isfile(mono_path) and os.path.isfile(color_path)
 
         if onnx_ok and saw_completion:
-            await asyncio.to_thread(self._db_mark_completed, job_id, mono_path, color_path)
+            # ステージング(training/固定パス)からタプル別の最終パスへ移動する（決定21・22）。
+            # タプル単位で最新のみ保持するため、同タプルの既存ファイルは上書きする。
+            mono_final = self._cfg.final_onnx_path(color_no, size, chain, tape, "monochro")
+            color_final = self._cfg.final_onnx_path(color_no, size, chain, tape, "color")
+            try:
+                await asyncio.to_thread(self._promote_onnx, mono_path, mono_final)
+                await asyncio.to_thread(self._promote_onnx, color_path, color_final)
+            except OSError as exc:
+                reason = f"ONNX最終パスへの移動に失敗: {exc!r}"
+                await asyncio.to_thread(self._db_mark_failed, job_id, reason)
+                self._hub.publish(job_id, f"[STATUS] FAILED {reason}")
+                self._hub.close(job_id)
+                return
+            await asyncio.to_thread(self._db_mark_completed, job_id, mono_final, color_final)
             self._hub.publish(job_id, "[STATUS] COMPLETED")
             self._hub.close(job_id)
             await self._fire_on_completed(job_id)
@@ -417,6 +447,12 @@ class TrainingService:
         if not saw_completion:
             return f"完了マーカー（{COMPLETION_MARKER}）未検出"
         return "不明な失敗"
+
+    @staticmethod
+    def _promote_onnx(staging_path: str, final_path: str) -> None:
+        """ステージングパスから最終パスへ ONNX を移動する（決定22。既存ファイルは上書き）。"""
+        os.makedirs(os.path.dirname(final_path), exist_ok=True)
+        shutil.move(staging_path, final_path)
 
     async def _fire_on_completed(self, job_id: int) -> None:
         if self._on_completed is None:

@@ -268,6 +268,31 @@ def test_resolve_margin_dataset_id_finds_matching_name(tmp_path: object) -> None
     assert cfg.resolve_margin_dataset_id("5", "YY") == "ds-margin-1"
 
 
+@pytest.mark.integration
+def test_final_onnx_path_builds_tuple_scoped_path() -> None:
+    """検証基準11: (color_no,size,chain,tape,mode)から最終ONNXパスを正しく組み立てる。"""
+    from src.services.training_service import TrainingConfig
+
+    cfg = TrainingConfig(training_dir="/x", model_dir="/model_root")
+    assert cfg.final_onnx_path("501", "5", "YY", "CZT8", "monochro") == os.path.join(
+        "/model_root", "501", "5_YY_CZT8", "monochro", "501_5_YY_CZT8_monochro_model.onnx"
+    )
+    assert cfg.final_onnx_path("501", "5", "YY", "CZT8", "color") == os.path.join(
+        "/model_root", "501", "5_YY_CZT8", "color", "501_5_YY_CZT8_color_model.onnx"
+    )
+
+
+@pytest.mark.integration
+def test_final_onnx_path_keeps_empty_tape_as_is() -> None:
+    """tapeが空文字の場合は空文字のまま連結する（決定22。プレースホルダは使わない）。"""
+    from src.services.training_service import TrainingConfig
+
+    cfg = TrainingConfig(training_dir="/x", model_dir="/model_root")
+    assert cfg.final_onnx_path("501", "5", "YY", "", "monochro") == os.path.join(
+        "/model_root", "501", "5_YY_", "monochro", "501_5_YY__monochro_model.onnx"
+    )
+
+
 def _make_onnx(cfg: object, color: str) -> None:
     for mode in ("monochro", "color"):
         p = cfg.onnx_path(color, mode)  # type: ignore[attr-defined]
@@ -338,6 +363,85 @@ def test_job_completes_when_onnx_and_marker(monkeypatch, tmp_path, session_facto
     lines = asyncio.run(scenario())
     assert any("パイプライン完了" in ln for ln in lines)  # 素通し
     assert any(ln.startswith("[STATUS] COMPLETED") for ln in lines)
+
+
+@pytest.mark.integration
+def test_completion_promotes_onnx_to_final_tuple_path_and_overwrites_on_rerun(
+    monkeypatch, tmp_path, session_factory
+) -> None:
+    """検証基準12: 完了処理がステージングパスから最終パス（フルタプル別）へ移動し、
+    mark_completed に最終パスを渡すこと。同一タプルで2回連続完了させた場合、
+    2回目の最終ファイルが1回目を正しく上書きすることを確認する。"""
+    from src.models.retraining_job import JobStatus
+    from src.repositories.retraining_repository import RetrainingRepository
+    from src.services.training_service import TrainingService
+
+    cfg = _cfg(tmp_path)
+    _stub_process_group(monkeypatch)
+
+    def _get_paths(jid: int) -> tuple[str | None, str | None]:
+        db = session_factory()
+        try:
+            job = RetrainingRepository(db).get(jid)
+            assert job is not None
+            return job.onnx_monochro_path, job.onnx_color_path
+        finally:
+            db.close()
+
+    def _write_onnx(content: bytes) -> None:
+        for mode in ("monochro", "color"):
+            p = cfg.onnx_path("501", mode)
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p, "wb") as f:
+                f.write(content)
+
+    expected_mono_final = cfg.final_onnx_path("501", "05", "CZT8", "", "monochro")
+    expected_color_final = cfg.final_onnx_path("501", "05", "CZT8", "", "color")
+
+    async def scenario() -> tuple[bytes, bytes]:
+        svc = TrainingService(session_factory, cfg)
+        await svc.start()
+
+        _install_fake_subprocess(
+            monkeypatch,
+            lambda cmd, kw: FakeProcess(
+                ["パイプライン完了"], on_wait=lambda: _write_onnx(b"onnx-v1")
+            ),
+        )
+        jid1 = _create_job(session_factory, "501")
+        svc.enqueue(jid1)
+        await _drain(svc, jid1)
+        assert _status(session_factory, jid1) == JobStatus.COMPLETED.value
+        mono1, color1 = _get_paths(jid1)
+        assert mono1 == expected_mono_final
+        assert color1 == expected_color_final
+        # ステージング(training/固定パス)は移動済みで存在しない（同タプル最新のみ保持の前提として、
+        # 移動先=最終パスにのみ実体があること）。
+        assert not os.path.isfile(cfg.onnx_path("501", "monochro"))
+        with open(expected_mono_final, "rb") as f:
+            first_content = f.read()
+
+        _install_fake_subprocess(
+            monkeypatch,
+            lambda cmd, kw: FakeProcess(
+                ["パイプライン完了"], on_wait=lambda: _write_onnx(b"onnx-v2")
+            ),
+        )
+        jid2 = _create_job(session_factory, "501")
+        svc.enqueue(jid2)
+        await _drain(svc, jid2)
+        assert _status(session_factory, jid2) == JobStatus.COMPLETED.value
+        mono2, _color2 = _get_paths(jid2)
+        assert mono2 == expected_mono_final  # 同タプル → 同じ最終パス
+
+        await svc.stop()
+        with open(expected_mono_final, "rb") as f:
+            second_content = f.read()
+        return first_content, second_content
+
+    first_content, second_content = asyncio.run(scenario())
+    assert first_content == b"onnx-v1"
+    assert second_content == b"onnx-v2"  # 2回目が1回目を正しく上書き
 
 
 @pytest.mark.integration
