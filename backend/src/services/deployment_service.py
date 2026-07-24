@@ -3,7 +3,8 @@
 学習と分離（`training_service` から COMPLETED 時に呼ぶ＝v1 自動／将来は手動 API から）。
 - COMPLETED ジョブの ONNX（monochro/color）を、有効なエッジPC（`エッジPC管理`）へ **FTP 配信**する。
   FTP は学習側に依存せず **ver2 自前の ftplib** 送信（境界を分離）。配信先ポートは `model_port`。
-- 検査PC 互換のため、リモート名は **`{color_no}_{mode}_model.onnx`**（色番ベース）を FTP ルート直下に置く。
+- リモート名は **`{color_no}_{size}_{chain}_{tape}_{mode}_model.onnx`**（フルタプルベース）を FTP ルート直下に置く
+  （検査PC側の対応済み。`tape`が空文字の場合は空文字のまま連結する＝プレースホルダなし）。
 - `deployed_model`（**フルタプル単位**＝案A）に upsert。全台成功=SUCCESS／一部失敗=PARTIAL／全失敗=FAILED。
   FTP 失敗でもジョブ成功は覆さない（再配信可能な記録として残す）。
 
@@ -99,9 +100,9 @@ class DeploymentService:
             db.close()
 
     @staticmethod
-    def _remote_name(color_no: str, mode: str) -> str:
-        # 検査PC 取り込み互換: 色番ベースのファイル名（フルタプルは ver2 の記録側で保持）。
-        return f"{color_no}_{mode}_model.onnx"
+    def _remote_name(color_no: str, size: str, chain: str, tape: str, mode: str) -> str:
+        # 決定23: フルタプルベースのファイル名（検査PC側の対応済み）。tape空文字はそのまま連結する。
+        return f"{color_no}_{size}_{chain}_{tape}_{mode}_model.onnx"
 
     def deploy_job(self, job_id: int) -> dict:
         """ジョブの ONNX を有効エッジPC全台へ配信し、現行配信モデルを upsert する（同期）。
@@ -134,7 +135,9 @@ class DeploymentService:
                 ok = True
                 errors: list[str] = []
                 for mode, local_path in artifacts:
-                    remote_name = self._remote_name(job.color_no, mode)
+                    remote_name = self._remote_name(
+                        job.color_no, job.size, job.chain, job.tape, mode
+                    )
                     try:
                         self._send(
                             host=pc.host,

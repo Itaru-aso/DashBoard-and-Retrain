@@ -1,6 +1,6 @@
 """deployment_service（retraining M-R8）の integration テスト（FTP をフェイク注入）。
 
-配信集約（SUCCESS/PARTIAL/FAILED）・色番ベースのリモート名・model_port・deployed upsert・
+配信集約（SUCCESS/PARTIAL/FAILED）・フルタプルベースのリモート名・model_port・deployed upsert・
 非 COMPLETED / ONNX 欠落の異常系を検証する。DB は commit する専用 session_factory を用いる。
 """
 
@@ -108,16 +108,34 @@ def test_deploy_all_success(session_factory, tmp_path) -> None:
 
     assert result["status"] == DeployStatus.SUCCESS.value
     assert result["edge_pc_count"] == 2
-    # 2台 × 2モード = 4 送信・リモート名は色番ベース・ポートは model_port。
+    # 2台 × 2モード = 4 送信・リモート名はフルタプルベース・ポートは model_port。
     assert len(calls) == 4
     assert {c["remote_name"] for c in calls} == {
-        "501_monochro_model.onnx",
-        "501_color_model.onnx",
+        "501_05_CZT8__monochro_model.onnx",
+        "501_05_CZT8__color_model.onnx",
     }
     assert {c["port"] for c in calls} == {21}
 
     dep = _deployed(session_factory, "501", "05", "CZT8", "")
     assert dep is not None and dep.deploy_status == DeployStatus.SUCCESS.value
+
+
+@pytest.mark.integration
+def test_deploy_uses_tuple_scoped_remote_name_with_tape(session_factory, tmp_path) -> None:
+    """検証基準13: tapeが非空の場合もフルタプルを連結したリモート名になる（決定23）。"""
+    job_id = _completed_job(session_factory, tmp_path, tape="CZT8T")
+    calls: list[dict] = []
+
+    def sender(**kw):
+        calls.append(kw)
+
+    svc = _service(session_factory, [FakeEdgePc("pc1")], sender)
+    svc.deploy_job(job_id)
+
+    assert {c["remote_name"] for c in calls} == {
+        "501_05_CZT8_CZT8T_monochro_model.onnx",
+        "501_05_CZT8_CZT8T_color_model.onnx",
+    }
 
 
 @pytest.mark.integration

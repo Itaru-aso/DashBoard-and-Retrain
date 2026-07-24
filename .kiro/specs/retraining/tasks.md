@@ -251,16 +251,22 @@
     確認済み。
   - Refs: 決定21, 22 ／ commit: `feat(training-service): ONNX保存パスのタプル管理`
 
-- [ ] **18.（保留・要確認待ち）エッジPC配信ファイル名のタプル化**
-  - **既存タスクとの関係**: タスク6（`[x]`完了済み）が実装した`{color_no}_{mode}_model.onnx`固定の
-    リモート名は、着手条件が満たされるまで現状のまま維持する（本タスク着手時に置き換わる）。
-  - `deployment_service.py:102-104`の`_remote_name(color_no, mode)`
-    （`{color_no}_{mode}_model.onnx`）を`{color_no}_{size}_{chain}_{tape}_{mode}_model.onnx`に変更する。
-    配信メカニズム・配信先パス（`remote_dir`等）自体は変更しない。
-  - **着手条件**: エッジPC側の検査アプリケーション（リポジトリ外）が新ファイル名を受理できるか未確認。
-    確認が取れるまで実装しない（`dataset-export-root-migration.md`未解決パラメータ参照）。
-  - テスト（着手後）: 検証基準13。
-  - Refs: 決定23 ／ commit: 未定（保留中）
+- [x] **18. エッジPC配信ファイル名のタプル化**
+  - **着手条件（解消済み・2026-07-24）**: エッジPC側の検査アプリケーション（リポジトリ外）が新ファイル名を
+    受理できるか未確認だったため保留していたが、ユーザーが検査アプリを改修し本番検査PC全台への反映・確認を
+    完了（tapeが空文字の場合の二重アンダースコアケースも実機確認済み）。詳細は
+    `dataset-export-root-migration.md` v1.6。
+  - `deployment_service.py`の`_remote_name(color_no, mode)`（`{color_no}_{mode}_model.onnx`）を
+    `_remote_name(color_no, size, chain, tape, mode)`（`{color_no}_{size}_{chain}_{tape}_{mode}_model.onnx`）
+    に変更。呼び出し元（`deploy_job`）は既に取得済みの`job.size`/`job.chain`/`job.tape`を渡すのみで、
+    新規のDB問い合わせは不要。配信メカニズム・配信先パス（`remote_dir`等）・`deployed_model`upsert（既に
+    フルタプル単位）は変更しない。モジュールdocstringのリモート名記述も更新。
+  - タスク17の`final_onnx_path`と同じ命名式（`{color_no}_{size}_{chain}_{tape}_{mode}_model.onnx`）を採用し、
+    ローカル最終パスのファイル名とリモート名を一致させた。
+  - テスト（`backend/tests/integration/test_deployment_service.py`）: 検証基準13
+    （`test_deploy_all_success`のリモート名アサーションをタプルベースに更新、tape非空ケースを
+    `test_deploy_uses_tuple_scoped_remote_name_with_tape`で追加）。Docker起動環境で全8件PASS確認済み。
+  - Refs: 決定23 ／ commit: `feat(deployment-service): 配信ファイル名のタプル化`
 
 ---
 
