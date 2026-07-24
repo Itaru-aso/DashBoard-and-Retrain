@@ -120,6 +120,102 @@
 
 ---
 
+## 追加タスク: データセット参照方式の変更（FTP→export_root）
+
+> 出典: `.kiro/specs/retraining/dataset-export-root-migration.md` v1.4（設計レビュー完了・決定事項1〜24）。
+> CLAUDE.md例外（決定12・20）はユーザー承認済み。対象: `training/dataset/`・`training/utils/ftp_common.py`・
+> `training/utils/image_preprocessing.py`・`training/pipline.py`のオーケストレーション部分・
+> `training/train/monochro.py`のDataLoader構築部分のみ。学習アルゴリズム本体（損失関数・モデル構造・
+> 学習ループ・color側ロジック）は対象外・変更不可。
+> 依存順: 12 → 13 → 14 → 15 → 16、17 は 14 と並行可・15 に依存（決定24でtapeを15が配線するため）、
+> 18 は要確認待ちで着手しない。
+
+- [ ] **12. `training/dataset/manager.py`: export_root直接変換への書き換え**
+  - `1_download`/`2_staging`を廃止し、`export_root/{dataset_id}/metadata.json` + `binary/{color_no}/{category_id}/`を
+    直接読んで`3_pool`（good_pool/defect_pool）へ変換する新選定ロジックに書き換える。
+    `metadata.json`の`category[].on_class`でgood/defect判定、`invalid_flg=1`のカテゴリはpool構築から除外。
+  - ファイル名正規化（`_top`→`_0`、`_bottom`→`_1`）をpoolコピー時に実施（`utils/split_manager.py`の
+    `_extract_product_id`が期待する`_<数字>`接尾に揃える。`split_manager.py`自体は無改修で流用）。
+  - リサイズ工程（`cv2.resize`、config `image_size`相当）は`manager.py`側に残す（crop・分割の呼び出しは不要）。
+  - `common.target_color`と`binary/{color_no}/`フォルダ名の不一致は明確なエラーとする（サイレント0件処理は禁止）。
+  - テスト（`training/tests/dataset/`・フィクスチャexport_root）: 検証基準1・2・3。
+  - Refs: 決定1, 2, 3, 7, 8, 9, 11 ／ commit: `feat(training-dataset): export_root直接変換への選定ロジック書き換え`
+
+- [ ] **13. FTP入力側の削除 + `pipline.py`オーケストレーション修正 + `config.yaml`整理**
+  - **既存タスクとの関係**: タスク0（`[x]`完了済み）が追加した`common.skip_download`ガード付きのFTP経路を
+    含め、入力側FTPを本タスクで全削除する（タスク0の成果は本タスクで置き換わる）。
+  - `training/dataset/ftp_download.py`（`FTPManager`/`MultiFTPManager`）・`training/utils/ftp_common.py`
+    （`AnnotationDownloader`等）を削除。`training/dataset/__init__.py`のre-exportを追随修正。
+  - `training/pipline.py`: 22行目の`from dataset import DatasetManager, MultiFTPManager`から`MultiFTPManager`を除去、
+    `__init__`の`self.ftp_manager = MultiFTPManager(self.cfg)`（147行）を削除、`execute()`内のDLループ（168-176行）を
+    export_root参照呼び出しに置換。**出力側FTP（`deploy.upload_model`・260-274行）は変更しない**。
+  - `training/conf/config.yaml`: `download_dir`（18行）・`ftp_common`（28-29行）・`ftp_hosts`（32行）を削除し、
+    `common.export_root`/`common.dataset_id_monochro`/`common.dataset_id_color`/`common.margin_export_root`/
+    `common.dataset_id_monochro_margin`のCLIオーバーライド用キーを追加。
+  - テスト: 検証基準8（`ftp_download.py`/`ftp_common.py`への参照が残っていないことをgrepで確認）・
+    検証基準9（`deployment_service.py`側の出力FTPテストに変更が及んでいないことを確認）。
+  - Refs: 決定10, 12 ／ commit: `refactor(training-pipline): FTP入力側を削除しexport_root参照へ一本化`
+
+- [ ] **14. backend: `TRAINING_EXPORT_ROOT`/`TRAINING_MARGIN_EXPORT_ROOT`設定 + dataset_id解決**
+  - `backend/src/config.py`に`TRAINING_EXPORT_ROOT`/`TRAINING_MARGIN_EXPORT_ROOT`を既存`TRAINING_DIR`等
+    （46-55行）と同パターンで追加。
+  - `(mode, size, chain)` → `dataset_id`解決処理を実装（配置場所は実装時に既存命名規則へ合わせて決定。
+    `training_service.py`直接実装 or 新規ヘルパーモジュールのいずれか）。`export_root`/`export_root_margin`
+    配下を走査し`metadata.json`の`name`一致で検出。マージン側が見つからない場合は空文字にフォールバックし
+    非致命的に継続。
+  - テスト（`backend/tests/`・フィクスチャディレクトリ）: 検証基準4。
+  - Refs: 決定4, 5, 13 ／ commit: `feat(training-service): export_root/export_root_marginのdataset_id解決を追加`
+
+- [ ] **15. backend: `_run_job`/`build_command`のCLI override配線（size/chain/tape配線）**
+  - **既存タスクとの関係**: タスク5（`[x]`完了済み）は学習起動に`common.target_color`（color_noのみ）を渡す
+    設計だったが、本タスクでsize/chain/tapeも渡すよう配線を追加する（タスク5の起動コマンド構築を拡張）。
+  - `training_service.py:295`の`_run_job`が`_size`/`_chain`/`_tape`として捨てているsize/chain/tapeを
+    `build_command`まで配線し直す。
+  - `build_command`が解決済みdataset_id・export_rootパスを`common.export_root`/`common.dataset_id_monochro`/
+    `common.dataset_id_color`/`common.margin_export_root`/`common.dataset_id_monochro_margin`のCLI override
+    として正しく組み立てるようにする。`tape`は完了後のONNXパス解決（タスク17）・配信ファイル名解決
+    （タスク18・保留）に使うため保持する。
+  - テスト（`backend/tests/integration/test_training_service.py`）: 検証基準5。
+  - Refs: 決定6, 14, 24 ／ commit: `feat(training-service): size/chain/tapeをbuild_commandまで配線`
+
+- [ ] **16. `training/train/monochro.py`: マージンあり/なしDataLoader合体（monochro専用）**
+  - `use_raw_shift_dataset=true`時（155-192行）の`raw_image_root`参照先を`1_download`から
+    マージンありexportの解決済みパス（`export_root_margin`）に変更。`RawShiftImageFolder`
+    （`training/utils/raw_shift_dataset.py`）・`process_image`のcrop式自体は変更不要（未分割・生センサー座標系のため）。
+  - train = マージンありgood画像全量（±20pxランダムシフト） + export_root（マージンなし）goodのtrain分
+    （シフトなし）。val/test = export_root goodのtest分のみ（既存の「rawをoffset=0でクロップ」処理は不要）。
+  - 188行の`torch.randperm`独自分割を、製品ID単位グルーピング済みのexport_root test分への置き換えとして扱う
+    （`split_manager`の出力を使う新規利用）。
+  - defectカテゴリ（on_class=1）はmonochroのDataLoaderに一切含めない（マージン側・export_root側とも）。
+    colorのDataLoader構築・学習ロジック（good+defect二値分類）は変更しない。
+  - テスト（`training/tests/train/`・フィクスチャ）: 検証基準6・7・7b・10。
+  - Refs: 決定15-20 ／ commit: `feat(training-monochro): マージンあり/なしデータのDataLoader合体`
+
+- [ ] **17. backend: ONNX保存パスのタプル管理（ステージング→最終パス移動）**
+  - `training_service.py`の`TrainingConfig.onnx_path(color_no, mode)`（64-66行、学習側ステージング出力先）は
+    不変のまま、`(color_no, size, chain, tape, mode)`から最終パス
+    `model_dir/{color_no}/{size}_{chain}_{tape}/{mode}/{color_no}_{size}_{chain}_{tape}_{mode}_model.onnx`
+    （tape空文字は空文字のまま連結）を組み立てる処理を追加。
+  - `_run_job`の完了判定後、ステージングパスから最終パスへファイルを移動し、`mark_completed(job_id, ...)`には
+    移動後の最終パスを渡す（タプル単位で最新のみ保持・同タプルの既存ファイルは上書き）。`training/`側
+    （`deploy/model_export.py`）は変更しない。
+  - テスト（`backend/tests/integration/test_training_service.py`）: 検証基準11・12（同一タプル2回連続完了で
+    2回目が1回目を正しく上書き）。
+  - Refs: 決定21, 22 ／ commit: `feat(training-service): ONNX保存パスのタプル管理`
+
+- [ ] **18.（保留・要確認待ち）エッジPC配信ファイル名のタプル化**
+  - **既存タスクとの関係**: タスク6（`[x]`完了済み）が実装した`{color_no}_{mode}_model.onnx`固定の
+    リモート名は、着手条件が満たされるまで現状のまま維持する（本タスク着手時に置き換わる）。
+  - `deployment_service.py:102-104`の`_remote_name(color_no, mode)`
+    （`{color_no}_{mode}_model.onnx`）を`{color_no}_{size}_{chain}_{tape}_{mode}_model.onnx`に変更する。
+    配信メカニズム・配信先パス（`remote_dir`等）自体は変更しない。
+  - **着手条件**: エッジPC側の検査アプリケーション（リポジトリ外）が新ファイル名を受理できるか未確認。
+    確認が取れるまで実装しない（`dataset-export-root-migration.md`未解決パラメータ参照）。
+  - テスト（着手後）: 検証基準13。
+  - Refs: 決定23 ／ commit: 未定（保留中）
+
+---
+
 ## トレーサビリティ (Requirements ↔ Tasks)
 
 - M-R1（起票・手動・存在チェック）→ 3, 8, 11 ／ M-R2（キュー・同時1）→ 5
@@ -129,3 +225,11 @@
 
 > 注: 実学習・実 FTP・プロセス kill はテストでモック。CUDA は学習側 cu121→**cu128 系へ入替**前提（Blackwell・`tech.md`）。
 > 配信先 ONNX のリモート名は検査PC互換のため color_no ベース固定（ver2 の記録はフルタプル＝案A）。
+> **タスク18（配信ファイル名タプル化）の着手後は本注記を更新すること。**
+
+### データセット参照方式移行（ADR決定 ↔ Tasks）
+
+- 決定1〜3・7〜9・11（export_root参照の基本方針）→ 12 ／ 決定10・12（FTP削除・CLAUDE.md例外）→ 13
+- 決定4・5・13（per-mode解決・dataset_id解決・env）→ 14 ／ 決定6・14・24（CLI override配線・size/chain/tape）→ 15
+- 決定15〜20（マージンあり画像・monochro DataLoader）→ 16 ／ 決定21・22（ONNXパスのタプル管理）→ 17
+- 決定23（配信ファイル名タプル化・保留）→ 18
