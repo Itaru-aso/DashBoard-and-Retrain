@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import signal
@@ -37,6 +38,29 @@ COMPLETION_MARKER = "パイプライン完了"
 _RECENT_LINES = 200  # WS 後追い接続者向けの直近ログ保持数（揮発）
 
 
+def _find_dataset_id(export_root: str, target_name: str) -> str:
+    """`export_root` 配下を走査し、`metadata.json` の `name` が `target_name` と一致する
+    dataset_id（サブディレクトリ名）を返す。
+
+    見つからない場合は空文字を返す（致命的にするか非致命的にフォールバックするかは
+    呼び出し側が決める。dataset-export-root-migration.md 決定5・16）。
+    """
+    if not export_root or not os.path.isdir(export_root):
+        return ""
+    for entry in sorted(os.listdir(export_root)):
+        metadata_path = os.path.join(export_root, entry, "metadata.json")
+        if not os.path.isfile(metadata_path):
+            continue
+        try:
+            with open(metadata_path, "r", encoding="utf-8") as f:
+                metadata = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if metadata.get("name") == target_name:
+            return entry
+    return ""
+
+
 @dataclass
 class TrainingConfig:
     """学習側起動の設定（`config.py` / env から注入）。"""
@@ -52,6 +76,10 @@ class TrainingConfig:
     # 4_dataset/backup を {data_root}/<同名サブディレクトリ> で一括上書きする
     # （config.yaml 自身がローカル Windows 用の絶対パスを指す場合、Docker 側で差し替える用途）。
     data_root: str = ""
+    # dataset選定元（export_root直接変換。TRAINING_EXPORT_ROOT env から注入）。
+    export_root: str = ""
+    # マージンあり画像（monochro専用固定検証データプール。TRAINING_MARGIN_EXPORT_ROOT env から注入）。
+    margin_export_root: str = ""
     # 既定で付与する dotlist override（収集スコープ外・配信分離・mlflow 無効）
     base_overrides: tuple[str, ...] = (
         "common.pipeline_mode=train",
@@ -64,6 +92,22 @@ class TrainingConfig:
     def onnx_path(self, color_no: str, mode: str) -> str:
         """成果物 ONNX パス: model_dir/<color>/<mode>/<color>_<mode>_model.onnx（mode=monochro/color）。"""
         return os.path.join(self.model_dir, color_no, mode, f"{color_no}_{mode}_model.onnx")
+
+    def resolve_dataset_id(self, mode: str, size: str, chain: str) -> str:
+        """`export_root` から `(mode, size, chain)` に対応する dataset_id を解決する。
+
+        `metadata.json` の `name`（`{mode}_{size}_{chain}` 固定フォーマット）が一致する
+        サブディレクトリ名を dataset_id として返す。見つからない場合は空文字。
+        """
+        return _find_dataset_id(self.export_root, f"{mode}_{size}_{chain}")
+
+    def resolve_margin_dataset_id(self, size: str, chain: str) -> str:
+        """`margin_export_root` から monochro 用マージンあり dataset_id を解決する。
+
+        monochro 専用（`RawShiftImageFolder` が monochro 専用のため）。見つからない場合は
+        空文字を返す（マージンなし学習へのフォールバックは training/ 側の責務）。
+        """
+        return _find_dataset_id(self.margin_export_root, f"monochro_{size}_{chain}")
 
     def build_command(self, color_no: str) -> list[str]:
         """起動コマンドを組み立てる（色番は文字列で渡す）。

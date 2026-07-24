@@ -164,14 +164,22 @@
     検証基準9（`deployment_service.py`側の出力FTPテストに変更が及んでいないことを確認）。
   - Refs: 決定10, 12 ／ commit: `refactor(training-pipline): FTP入力側を削除しexport_root参照へ一本化`
 
-- [ ] **14. backend: `TRAINING_EXPORT_ROOT`/`TRAINING_MARGIN_EXPORT_ROOT`設定 + dataset_id解決**
-  - `backend/src/config.py`に`TRAINING_EXPORT_ROOT`/`TRAINING_MARGIN_EXPORT_ROOT`を既存`TRAINING_DIR`等
-    （46-55行）と同パターンで追加。
-  - `(mode, size, chain)` → `dataset_id`解決処理を実装（配置場所は実装時に既存命名規則へ合わせて決定。
-    `training_service.py`直接実装 or 新規ヘルパーモジュールのいずれか）。`export_root`/`export_root_margin`
-    配下を走査し`metadata.json`の`name`一致で検出。マージン側が見つからない場合は空文字にフォールバックし
-    非致命的に継続。
-  - テスト（`backend/tests/`・フィクスチャディレクトリ）: 検証基準4。
+- [x] **14. backend: `TRAINING_EXPORT_ROOT`/`TRAINING_MARGIN_EXPORT_ROOT`設定 + dataset_id解決**
+  - `backend/src/config.py`に`TRAINING_EXPORT_ROOT`/`TRAINING_MARGIN_EXPORT_ROOT`を既存`TRAINING_DIR`等と
+    同パターンで追加。`main.py`のlifespanで`TrainingConfig`（`export_root`/`margin_export_root`）へ配線。
+  - 配置場所は`training_service.py`直接実装を採用（`TrainingConfig`と密結合のため新規モジュールは不要と判断）。
+    モジュール関数`_find_dataset_id(export_root, target_name)`が`export_root`配下を走査し`metadata.json`の
+    `name`一致で dataset_id（サブディレクトリ名）を返す。`TrainingConfig.resolve_dataset_id(mode, size, chain)`
+    （export_root・mono/color両対応）と`resolve_margin_dataset_id(size, chain)`（margin_export_root・
+    monochro専用）でラップ。見つからない場合はいずれも空文字を返す（致命的にするかはCLI override配線側＝
+    タスク15/16の責務、本タスクの解決関数自体は主/マージンで同一の「見つからなければ空文字」動作）。
+  - **フォローアップ（未対応）**: `TrainingConfig.build_command`の`data_root`上書きブロックが
+    `common.download_dir`/`common.staging_dir`/`monochro.raw_image_root={data_root}/1_download`という
+    タスク13で廃止済みのキーを今も生成する（`test_build_command_overrides_data_paths_when_data_root_set`が
+    その文字列を検証中）。害はない（存在しないキーを新規作成するだけ）が、export_root系に揃える修正は
+    build_commandを触るタスク15で行う。
+  - テスト（`backend/tests/integration/test_training_service.py`・フィクスチャディレクトリ）: 検証基準4
+    （main/marginのdataset_id解決・マージン側が見つからない場合の空文字フォールバック）。
   - Refs: 決定4, 5, 13 ／ commit: `feat(training-service): export_root/export_root_marginのdataset_id解決を追加`
 
 - [ ] **15. backend: `_run_job`/`build_command`のCLI override配線（size/chain/tape配線）**

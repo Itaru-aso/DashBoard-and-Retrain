@@ -7,6 +7,7 @@ pytest-asyncio を使わず、各テストは `asyncio.run` でシナリオを�
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from collections.abc import AsyncIterator, Callable, Iterator
 
@@ -141,6 +142,81 @@ def test_build_command_overrides_imagenet_when_set(tmp_path: object) -> None:
     )
     cmd = cfg.build_command("501")
     assert "common.imagenet_train_path=/imagenet/train" in cmd
+
+
+def _write_dataset_metadata(export_root: object, dataset_id: str, name: str) -> None:
+    # metadata.json の "id" はフォルダ名（dataset_id）とは別物（実データでも一致しない）。
+    # resolve_dataset_id はフォルダ名を返す実装であることをテストで固定するため、意図的に
+    # 異なる値にしておく（"id" を返すよう実装が変わってもテストが緑のままにならないように）。
+    ds_dir = os.path.join(str(export_root), dataset_id)
+    os.makedirs(ds_dir, exist_ok=True)
+    with open(os.path.join(ds_dir, "metadata.json"), "w", encoding="utf-8") as f:
+        json.dump({"id": f"{dataset_id}-metadata-uuid", "name": name, "category": []}, f)
+
+
+@pytest.mark.integration
+def test_resolve_dataset_id_finds_matching_name(tmp_path: object) -> None:
+    from src.services.training_service import TrainingConfig
+
+    export_root = os.path.join(str(tmp_path), "export_root")
+    _write_dataset_metadata(export_root, "ds-mono-1", "monochro_5_YY")
+    _write_dataset_metadata(export_root, "ds-color-1", "color_5_YY")
+
+    cfg = TrainingConfig(
+        training_dir=str(tmp_path),
+        model_dir=os.path.join(str(tmp_path), "6_model"),
+        export_root=export_root,
+    )
+
+    assert cfg.resolve_dataset_id("monochro", "5", "YY") == "ds-mono-1"
+    assert cfg.resolve_dataset_id("color", "5", "YY") == "ds-color-1"
+
+
+@pytest.mark.integration
+def test_resolve_dataset_id_returns_empty_when_not_found(tmp_path: object) -> None:
+    from src.services.training_service import TrainingConfig
+
+    export_root = os.path.join(str(tmp_path), "export_root")
+    _write_dataset_metadata(export_root, "ds-mono-1", "monochro_5_YY")
+
+    cfg = TrainingConfig(
+        training_dir=str(tmp_path),
+        model_dir=os.path.join(str(tmp_path), "6_model"),
+        export_root=export_root,
+    )
+
+    assert cfg.resolve_dataset_id("monochro", "9", "ZZ") == ""
+
+
+@pytest.mark.integration
+def test_resolve_margin_dataset_id_falls_back_to_empty_when_missing(tmp_path: object) -> None:
+    """マージン側が見つからない場合は空文字にフォールバックし、非致命的に処理が継続する
+    （dataset-export-root-migration.md 決定16）。"""
+    from src.services.training_service import TrainingConfig
+
+    cfg = TrainingConfig(
+        training_dir=str(tmp_path),
+        model_dir=os.path.join(str(tmp_path), "6_model"),
+        margin_export_root=os.path.join(str(tmp_path), "no_such_dir"),
+    )
+
+    assert cfg.resolve_margin_dataset_id("5", "YY") == ""
+
+
+@pytest.mark.integration
+def test_resolve_margin_dataset_id_finds_matching_name(tmp_path: object) -> None:
+    from src.services.training_service import TrainingConfig
+
+    margin_root = os.path.join(str(tmp_path), "export_root_margin")
+    _write_dataset_metadata(margin_root, "ds-margin-1", "monochro_5_YY")
+
+    cfg = TrainingConfig(
+        training_dir=str(tmp_path),
+        model_dir=os.path.join(str(tmp_path), "6_model"),
+        margin_export_root=margin_root,
+    )
+
+    assert cfg.resolve_margin_dataset_id("5", "YY") == "ds-margin-1"
 
 
 def _make_onnx(cfg: object, color: str) -> None:

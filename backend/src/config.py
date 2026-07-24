@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     TRAINING_IMAGENET_PATH: str = ""
     # 未設定（既定 空）なら config.yaml 自身のパス一式（pretraining_dir 等）を使う。
     TRAINING_DATA_ROOT: str = ""
+    # dataset選定元（export_root直接変換。別機能が生成する {dataset_id}/metadata.json +
+    # binary/{color_no}/{category_id}/ 構造を training_service が走査して dataset_id を解決する）。
+    TRAINING_EXPORT_ROOT: str = ""
+    # マージンあり画像（monochro専用、RawShiftImageFolder用の固定検証データプール）。
+    # 見つからない場合は非致命的にフォールバックする（マージンなし学習のみで継続）。
+    TRAINING_MARGIN_EXPORT_ROOT: str = ""
 
     # --- 日次集計ジョブ（アプリ内スケジューラ） ---
     AGG_RUN_TIME: str = "02:00"

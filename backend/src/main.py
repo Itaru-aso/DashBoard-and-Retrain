@@ -122,6 +122,8 @@ def _init_retraining_services() -> "TrainingService":
             python_executable=config.settings.TRAINING_PYTHON,
             imagenet_train_path=config.settings.TRAINING_IMAGENET_PATH,
             data_root=config.settings.TRAINING_DATA_ROOT,
+            export_root=config.settings.TRAINING_EXPORT_ROOT,
+            margin_export_root=config.settings.TRAINING_MARGIN_EXPORT_ROOT,
         ),
         on_completed=make_auto_deploy_hook(deployment_service),
     )
