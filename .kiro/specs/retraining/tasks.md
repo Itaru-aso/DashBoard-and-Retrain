@@ -130,7 +130,7 @@
 > 依存順: 12 → 13 → 14 → 15 → 16、17 は 14 と並行可・15 に依存（決定24でtapeを15が配線するため）、
 > 18 は要確認待ちで着手しない。
 
-- [ ] **12. `training/dataset/manager.py`: export_root直接変換への書き換え**
+- [x] **12. `training/dataset/manager.py`: export_root直接変換への書き換え**
   - `1_download`/`2_staging`を廃止し、`export_root/{dataset_id}/metadata.json` + `binary/{color_no}/{category_id}/`を
     直接読んで`3_pool`（good_pool/defect_pool）へ変換する新選定ロジックに書き換える。
     `metadata.json`の`category[].on_class`でgood/defect判定、`invalid_flg=1`のカテゴリはpool構築から除外。

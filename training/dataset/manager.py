@@ -1,10 +1,12 @@
+import json
 import os
 import shutil
 import datetime
 
 import cv2
+import numpy as np
 
-from utils.image_preprocessing import load_image_as_byte_array, process_image
+from utils.image_preprocessing import load_image_as_byte_array
 from utils.split_manager import split_pool_to_train_test
 
 
@@ -19,7 +21,6 @@ class DatasetManager:
         }
         self.dataset_path = cfg.common.dataset_path
         self.model_dir = cfg.common.model_dir
-        self.download_dir = cfg.common.download_dir
         self.backup_dir = cfg.common.backup_dir
 
         # モードごとのモデル保存パス
@@ -61,82 +62,96 @@ class DatasetManager:
         if not os.path.exists(dst_path):
             cv2.imwrite(dst_path, image_array)
 
+    @staticmethod
+    def _load_category_map(export_root, dataset_id):
+        """`export_root/{dataset_id}/metadata.json` を読み、category_id→category dict を返す。"""
+        metadata_path = os.path.join(export_root, dataset_id, "metadata.json")
+        with open(metadata_path, "r", encoding="utf-8") as f:
+            metadata = json.load(f)
+        return {c["category_id"]: c for c in metadata.get("category", [])}
+
+    @staticmethod
+    def _resolve_binary_dir(export_root, dataset_id, color):
+        """`export_root/{dataset_id}/binary/{color}/` を解決する。無ければ明確なエラーとする。"""
+        binary_dir = os.path.join(export_root, dataset_id, "binary", color)
+        if not os.path.isdir(binary_dir):
+            raise FileNotFoundError(
+                f"binary/{color} が見つかりません: {binary_dir}"
+                f" (common.target_color と export_root の色番フォルダ名が一致しているか確認してください)"
+            )
+        return binary_dir
+
+    @staticmethod
+    def _normalize_export_filename(filename):
+        """export_root の `_top`/`_bottom` 接尾を `split_manager` が期待する `_0`/`_1` に正規化する。"""
+        name, ext = os.path.splitext(filename)
+        if name.endswith("_top"):
+            return f"{name[:-len('_top')]}_0{ext}"
+        if name.endswith("_bottom"):
+            return f"{name[:-len('_bottom')]}_1{ext}"
+        return filename
+
     def process_annotated_images(self, modes=("monochro", "color")):
-        """ダウンロード済み画像を前処理し、mode 別に pool/staging へ振り分け。
+        """export_root の画像を mode 別に good_pool/defect_pool へ直接振り分ける。
+
+        `export_root/{dataset_id}/metadata.json` の on_class で good/defect を判定し、
+        invalid_flg=1 のカテゴリは除外する。export_root の画像は crop・top/bottom 分割済み・
+        リサイズ未適用のため、ここではファイル名正規化 (`_top`→`_0`、`_bottom`→`_1`) と
+        リサイズ (config の image_size) のみを行う。
 
         - monochro/good   → pool/{color}/monochro/good_pool/   (差分追加)
-        - monochro/defect → defect_staging_monochro/{color}/   (人手ゲート待ち)
+        - monochro/defect → pool/{color}/monochro/defect_pool/ (差分追加)
         - color/good      → pool/{color}/color/good_pool/      (差分追加)
-        - color/defect    → defect_staging/{color}/            (人手ゲート待ち)
+        - color/defect    → pool/{color}/color/defect_pool/    (差分追加)
 
         Args:
             modes: 処理対象 mode の iterable (既定 monochro+color)。
-                   特定 mode のみ前処理したい場合に絞り込む (例: ("monochro",))。
+                   特定 mode のみ処理したい場合に絞り込む (例: ("monochro",))。
         """
         color = str(self.target_color)
+        export_root = self.cfg.common.export_root
+        dataset_ids = {
+            "monochro": self.cfg.common.dataset_id_monochro,
+            "color": self.cfg.common.dataset_id_color,
+        }
 
         for mode in modes:
             img_h, img_w = self.image_sizes[mode]
-            if mode == "color":
-                ds_cfg = self.cfg.color.defect_staging
-            else:
-                ds_cfg = self.cfg.monochro.defect_staging
+            dataset_id = dataset_ids[mode]
 
             pool_good = os.path.join(self.cfg.common.pool_base, color, mode, "good_pool")
-            staging = os.path.join(self.cfg.common.staging_dir, color, mode)
+            pool_defect = os.path.join(self.cfg.common.pool_base, color, mode, "defect_pool")
             os.makedirs(pool_good, exist_ok=True)
-            os.makedirs(staging, exist_ok=True)
+            os.makedirs(pool_defect, exist_ok=True)
 
-            base_dir = os.path.join(self.download_dir, color, mode)
-            auto_split = ds_cfg.get("auto_split_halves", True)
+            category_map = self._load_category_map(export_root, dataset_id)
+            binary_dir = self._resolve_binary_dir(export_root, dataset_id, color)
 
-            # good: 前処理 → pool に差分追加
-            for root, dirs, files in os.walk(base_dir):
-                parts = root.split(os.path.sep)
-                if "good" in parts or "auto_good" in parts:
-                    for f in files:
-                        if not f.lower().endswith(('.bmp', '.png', '.jpg', '.jpeg', '.tiff')):
-                            continue
-                        p = os.path.join(root, f)
-                        # 1 枚の破損 (0 byte / decode 失敗) で色番全体が落ちないよう個別捕捉してスキップ
-                        try:
-                            image_data = load_image_as_byte_array(p)
-                            top, bottom, _ = process_image(image_data, img_w, img_h, mode)
-                        except Exception as e:  # noqa: BLE001
-                            print(f"⚠ [{mode}/good] スキップ {os.path.basename(p)}: {type(e).__name__}: {e}", flush=True)
-                            continue
-                        name, ext = os.path.splitext(os.path.basename(p))
-                        self._copy_if_new(top, os.path.join(pool_good, f"{name}_0{ext}"))
-                        self._copy_if_new(bottom, os.path.join(pool_good, f"{name}_1{ext}"))
+            for category_id in sorted(os.listdir(binary_dir)):
+                category_dir = os.path.join(binary_dir, category_id)
+                if not os.path.isdir(category_dir):
+                    continue
+                category = category_map.get(category_id)
+                if category is None or category.get("invalid_flg") == "1":
+                    continue
+                dest = pool_good if category.get("on_class") == "0" else pool_defect
 
-            # defect: 前処理 → staging に追加 (auto_split_halves で分岐)
-            clear_flag = ds_cfg.get("clear_before_download", False)
-            if clear_flag:
-                shutil.rmtree(staging, ignore_errors=True)
-                os.makedirs(staging, exist_ok=True)
-            for root, dirs, files in os.walk(base_dir):
-                parts = root.split(os.path.sep)
-                if "defect" in parts:
-                    for f in files:
-                        if not f.lower().endswith(('.bmp', '.png', '.jpg', '.jpeg', '.tiff')):
-                            continue
-                        p = os.path.join(root, f)
-                        if auto_split:
-                            try:
-                                image_data = load_image_as_byte_array(p)
-                                top, bottom, _ = process_image(image_data, img_w, img_h, mode)
-                            except Exception as e:  # noqa: BLE001
-                                print(f"⚠ [{mode}/defect] スキップ {os.path.basename(p)}: {type(e).__name__}: {e}", flush=True)
-                                continue
-                            name, ext = os.path.splitext(os.path.basename(p))
-                            self._copy_if_new(top, os.path.join(staging, f"{name}_0{ext}"))
-                            self._copy_if_new(bottom, os.path.join(staging, f"{name}_1{ext}"))
-                        else:
-                            dst = os.path.join(staging, f)
-                            if not os.path.exists(dst):
-                                shutil.copy2(p, dst)
+                for f in sorted(os.listdir(category_dir)):
+                    if not f.lower().endswith(('.bmp', '.png', '.jpg', '.jpeg', '.tiff')):
+                        continue
+                    src = os.path.join(category_dir, f)
+                    # 1 枚の破損 (0 byte / decode 失敗) で色番全体が落ちないよう個別捕捉してスキップ
+                    try:
+                        image_data = load_image_as_byte_array(src)
+                        img = cv2.imdecode(np.frombuffer(image_data, np.uint8), cv2.IMREAD_COLOR)
+                        resized = cv2.resize(img, (img_w, img_h), interpolation=cv2.INTER_AREA)
+                    except Exception as e:  # noqa: BLE001
+                        print(f"⚠ [{mode}] スキップ {f}: {type(e).__name__}: {e}", flush=True)
+                        continue
+                    normalized = self._normalize_export_filename(f)
+                    self._copy_if_new(resized, os.path.join(dest, normalized))
 
-            print(f"✅ {mode}: good→pool, defect→staging に振り分け完了")
+            print(f"✅ {mode}: export_root→pool 振り分け完了 (dataset_id={dataset_id})")
 
     def split_pool_to_dataset(self, color: str, mode: str = "color"):
         """pool/{color}/{mode}/{good,defect}_pool/ → dataset/{color}/{mode}/{train,test}/* を生成。
