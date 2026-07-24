@@ -151,10 +151,10 @@
   - `training/pipline.py`: `MultiFTPManager`のimport・`__init__`の`self.ftp_manager`・`execute()`内のFTP DLループを削除。
     **出力側FTP（`deploy.upload_model`）は変更しない**。
   - `pipeline_mode=stage_only`モード（`2_staging`廃止に伴い実装が壊れるため）はユーザー承認により削除。
-    **フォローアップ（未対応）**: `docs/superpowers/specs/2026-07-21-training-modular-monolith-migration-design.md`・
-    `docs/reference/retraining-integration-answers.md`が`pipeline_mode=<train|stage_only>`を
-    pipeline-edge契約として明文化したままになっている。次にこれらのドキュメントに触る際は
-    stage_only削除を反映すること。
+    **フォローアップ（対応済み・2026-07-24）**: `docs/superpowers/specs/2026-07-21-training-modular-monolith-migration-design.md`・
+    `docs/reference/retraining-integration-answers.md`に、`stage_only`削除・入力側FTP削除・
+    `download_dir`削除を反映する注記を追加（該当箇所に「2026-07-24追記」を挿入。ユーザー承認により
+    歴史的スナップショットの本文は書き換えず注記のみとした）。
   - `training/conf/config.yaml`: `download_dir`・`staging_dir`（`utils/paths.py`の`_KEYS`からも削除）・`ftp_common`
     （入力側local_root）を削除し、`common.export_root`/`common.dataset_id_monochro`/`common.dataset_id_color`/
     `common.margin_export_root`/`common.dataset_id_monochro_margin`のCLIオーバーライド用キーを追加。

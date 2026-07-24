@@ -37,10 +37,15 @@ EfficientAD 設計書 §1 と同じ）。
 - `common.skip_download` / `common.skip_upload`: ver2 backend 連携用の薄いラッパフラグ（`retraining-integration-answers.md` 記載の推奨改修）。デフォルト `false` で後方互換。
 - `_spawn_with_gpu_env` が `multiprocessing.get_context("spawn")` を明示指定（Docker/Linux 環境での CUDA fork 問題対策）。EfficientAD は Windows 前提のためこの修正が無い。
 - `pipeline_mode=stage_only`: FTP取得+前処理のみ実施して停止するモード。
+  （**2026-07-24追記**: 本モードは削除済み。`2_staging`廃止・入力側FTP削除に伴い実装が成立しなくなったため、
+  ユーザー承認を得て`pipline.py`から削除。詳細は `.kiro/specs/retraining/dataset-export-root-migration.md`
+  決定11、`.kiro/specs/retraining/tasks.md` タスク13）
 
 **ver2 backend との結合契約（変更しない）**:
 - `backend/src/services/training_service.py` が `cwd=training_dir` で
   `python pipline.py common.target_color=... common.pipeline_mode=...` を subprocess 起動する。
+  （**2026-07-24追記**: `pipeline_mode`キー自体は残るが値は`train`固定＝`stage_only`削除に伴い分岐なし。
+  詳細は上記の`stage_only`追記を参照）
 - 成功判定は「ONNX 生成の有無」＋ stdout の `パイプライン完了` マーカー。終了コードは信頼できない
   （並列時に子プロセスの例外が親に伝播しない）。
 - **フロントエンド（`frontend/src/pages/retrainingProgress.ts`）が stdout の特定文言を正規表現でパースし、
@@ -66,17 +71,24 @@ EfficientAD 設計書 §1 と同じ）。
 training/
 ├── pipline.py             # composition root。import元のみ変更。skip_download/skip_upload/
 │                          #   spawn context/stage_only は現状のまま維持
+│                          #   （2026-07-24追記: skip_download/stage_onlyはタスク13で削除済み。
+│                          #   spawn context/skip_uploadは維持）
 ├── model.py                # 共有モデル定義 (EfficientADFullModel)。Seam3で forward() を
 │                          #   utils/scoring_transform.py 呼び出しに置換
 ├── model_handler.py         # 現状未接続のまま維持（ADR-3継承、スコープ外）
 ├── conf/ , 0_pretraining/   # 変更なし
 ├── dataset/                 # 新設（Seam6）
 │   ├── __init__.py           # 公開API: DatasetManager, MultiFTPManager, FTPManager(download専用)
+│   │                          #   （2026-07-24追記: MultiFTPManager/FTPManagerはタスク13で削除。
+│   │                          #   現状の公開APIはDatasetManagerのみ）
 │   ├── manager.py             # DatasetManager: backup_model, process_annotated_images,
 │   │                          #   split_pool_to_dataset（accumulate_pool/stage_defect/
 │   │                          #   backup_dataset/backup_annotated_data は呼び出し元ゼロを
 │   │                          #   確認済み→ADR-7と同様に削除）
+│   │                          #   （2026-07-24追記: process_annotated_imagesはexport_root直接変換に
+│   │                          #   書き換え済み。タスク12）
 │   └── ftp_download.py         # FTPManager/MultiFTPManager の download_images 系のみ
+│                              #   （2026-07-24追記: ファイル自体を削除済み。入力側FTPを全廃。タスク13）
 ├── train/                    # 新設（Seam5）。EfficientAD は "training/" だが、対象範囲自体が
 │                             #   training/ のため入れ子回避のため train/ と命名（ADR-app1）
 │   ├── __init__.py            # 公開API: train_color, train_monochro
@@ -121,7 +133,7 @@ dataset → train → evaluation
 | `dataset → train` | train/test分割済みデータセットのディレクトリ構造 + 画像フォーマット |
 | `train → evaluation`, `train → deploy` | `para.json`スキーマ（`teacher_mean_1d`/`teacher_std_1d`, `q_st_start/end`, `q_ae_start/end`, `channel_weights`, `threshold`, `edge_mask_w`, `cand1_*`, `image_size_height/width`, `st_para`, `ae_para`）+ `.pth`×3（teacher/student/autoencoder） |
 | `deploy → 外部検査PC` | ONNXグラフ（前処理・スコアリング完全内包）+ ONNXメタデータ（`threshold`, `edge_mask_w`, `cand1_enabled`, `cand1_T`, `score_type`）+ 入力テンソル契約（`(1,3,H,W)`, 0–255レンジ, RGB, HWC→CHW） |
-| `deploy → ver2 backend`（app_ver2固有、pipeline-edge契約） | subprocess CLI契約: `cwd=training/`, `python pipline.py common.target_color=<str> common.pipeline_mode=<train\|stage_only> [key=value...]`。stdout: 上記stage markerの文言・順序・`パイプライン完了`終端行。成功判定はONNX生成有無 |
+| `deploy → ver2 backend`（app_ver2固有、pipeline-edge契約） | subprocess CLI契約: `cwd=training/`, `python pipline.py common.target_color=<str> common.pipeline_mode=<train\|stage_only> [key=value...]`。stdout: 上記stage markerの文言・順序・`パイプライン完了`終端行。成功判定はONNX生成有無（**2026-07-24追記**: `stage_only`削除済み。`pipeline_mode`は`train`固定値。詳細は §1・タスク13） |
 
 ---
 

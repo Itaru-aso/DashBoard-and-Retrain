@@ -57,6 +57,11 @@
 - `pipeline_mode=stage_only` なら 2〜3 のみ（人手レビュー用に staging まで）。
 - CLI エントリ: `python pipline.py key=value ...`（dotlist override、色番の8進数誤解釈を `_safe_cli_overrides` で回避）。
 
+> **2026-07-24追記**: 上記2（入力FTPダウンロード）・`stage_only`モードは削除済み。データセット参照方式が
+> FTP→`export_root`（前処理済みファイル参照）に変更され、`2_staging`と入力側FTPは全廃された。
+> 6のFTPアップロード（出力側・ONNX配信）は本追記の対象外（`skip_upload`ガード付きで維持）。
+> 詳細は `.kiro/specs/retraining/dataset-export-root-migration.md`、`.kiro/specs/retraining/tasks.md` タスク13。
+
 ### `train_func_monochro.py`（813行）/ `train_func_color.py`（685行）
 各モードの**学習本体**。`train_monochro(cfg, mgr=None)` / `train_color(cfg, mgr=None)` が flat な sub_cfg を受け取り:
 - データセット構築（monochro は raw 画像から crop shift augmentation `RawShiftImageFolder`）
@@ -90,6 +95,8 @@ customtkinter 製 GUI。「学習」「仕分け」タブを持ち、内部で `
 **A-2. 入力パラメータ**:
 - **対象色**: `common.target_color` の**単体（色番文字列、例 `'501'`/`'076'`）**。size/chain/tape は学習側では未使用。
 - **画像の所在**: **固定 config パス**（`common.download_dir=./1_download`, `dataset_path=./4_dataset` 等、すべて CWD 相対）。`--data-dir` 相当の専用引数は無いが、dotlist で `common.download_dir=...` のように上書き可能。
+  （**2026-07-24追記**: `download_dir`は削除済み。`common.export_root`/`common.margin_export_root`＋`dataset_id_*`に
+  置き換え。詳細は `.kiro/specs/retraining/dataset-export-root-migration.md`）
 - **monochro/color**: **1回の起動で両方**を学習（`execute()` が両 mode をループ。別々2回起動ではない）。
 - **GPU 指定**: **プログラム任せ**。`common.parallel_train=true`（既定）で GPU 枚数を自動検出し、**2枚以上なら monochro=GPU0 / color=GPU1**（`CUDA_VISIBLE_DEVICES` を子プロセスごとに切替えて spawn）、1枚なら両方 GPU0。`--gpus` 引数は無い。`parallel_train=false` で直列。
 - **実コマンド例**: `python pipline.py common.target_color=501 common.pipeline_mode=train`
@@ -134,10 +141,14 @@ customtkinter 製 GUI。「学習」「仕分け」タブを持ち、内部で `
 
 ### D. 環境・前提
 
-**D-1. 学習用画像の用意**: ⚠️ **spec と乖離あり**。
+**D-1. 学習用画像の用意**: ⚠️ **spec と乖離あり**（2026-06-30時点）。
 - 現状の `train` モードは、**学習側が検査PCから FTP で画像を取得**する（別機能が所定パスに置く前提ではない）。
 - 一方 `stage_only` モード＋人手レビュー後の `train` 再実行では、**`1_download` に配置済みの画像**を使う（FTP DL をスキップ）。
 - → ver2 が「画像は別機能が用意（収集スコープ外）」とするなら、**FTP DL を行わない運用（pre-placed + DL スキップ）に寄せる**設計合意が必要。
+
+> **2026-07-24追記**: この乖離は解消済み。入力FTPダウンロード・`stage_only`モードを削除し、
+> 学習側は`common.export_root`/`common.margin_export_root`配下の前処理済みファイルを直接参照する方式
+> （pre-placed 運用）に移行した。詳細は `.kiro/specs/retraining/dataset-export-root-migration.md`。
 
 **D-2. 依存・実行環境**:
 - **Python 3.11 / torch 2.5.1+cu121 / CUDA**（onnx, onnxruntime, opencv, omegaconf, customtkinter[GUIのみ], mlflow 等）。
@@ -147,6 +158,7 @@ customtkinter 製 GUI。「学習」「仕分け」タブを持ち、内部で `
 **D-3. 設定ファイル**:
 - `conf/config.yaml`（OmegaConf YAML, 254行）。
 - **ジョブごとに差し替える項目**: `common.target_color`（必須）、`common.pipeline_mode`（`train`/`stage_only`）。必要に応じ `common.parallel_train`、各 `mlflow.enabled`、`common.*_dir` パス。
+  （**2026-07-24追記**: `stage_only`削除済み。`pipeline_mode`は`train`固定値）
 - すべて **CLI dotlist override で差し替え可**（ファイル書換え不要）。
 
 ---
