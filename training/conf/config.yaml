@@ -15,26 +15,30 @@ common:
   dataset_path: ./4_dataset
   model_dir: ./6_model
   backup_dir: ./backup
-  download_dir: ./1_download
   pool_base: ./3_pool
-  staging_dir: ./2_staging
   splits_dir: ./5_splits
+  # dataset選定元 (export_root直接変換。backendがdataset_idを解決しCLI overrideで渡す)
+  export_root: ./export_root
+  dataset_id_monochro: ''
+  dataset_id_color: ''
+  margin_export_root: ./export_root_margin
+  dataset_id_monochro_margin: ''
   batch_size: 4
   persistent_workers: true   # ワーカーをエポック間で使い回す (Windows spawn の再起動ストーム回避)
   gpu_id: 0
   seed: 42
   out_channels: 384
   imagenet_train_path: D:/0032011/ILSVRC/Data/CLS-LOC/train
-  ftp_common:
-    local_root: ./annotated_data
-  # ver2 経由の実行では skip_download/skip_upload=true により未使用（MultiFTPManager の構築のみ発生・実I/Oなし）。
-  # 実接続情報は ver2 DB の edge_pc テーブルが正（deployment_service が model_port で配信）。
+  # 出力側FTP (deploy.upload_model が使う検査PCへの配信先。入力側FTP削除の対象外)
   ftp_hosts: []
   pipeline_mode: train
   parallel_train: true
   mode: 'color'
-  # ver2 連携用の配信分離フラグ (既定 false: 従来どおり FTP DL/配信を行う・後方互換)
-  skip_download: false   # true: FTP ダウンロードをスキップ (画像は別機能が 1_download に事前配置)
+  # skip_download: 入力側FTP削除 (dataset-export-root-migration.md 決定10) により
+  # ダウンロード処理自体が無くなったため既に no-op。backend が既定で渡す CLI override との
+  # 互換のためキーのみ残す (値は無視される)。
+  skip_download: false
+  # ver2 連携用の配信分離フラグ (既定 false: 従来どおり FTP 配信を行う・後方互換)
   skip_upload: false     # true: FTP アップロードをスキップ (配信は ver2 deployment_service が担う)
 
 # モノクロ専用

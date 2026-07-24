@@ -141,18 +141,26 @@
   - テスト（`training/tests/dataset/`・フィクスチャexport_root）: 検証基準1・2・3。
   - Refs: 決定1, 2, 3, 7, 8, 9, 11 ／ commit: `feat(training-dataset): export_root直接変換への選定ロジック書き換え`
 
-- [ ] **13. FTP入力側の削除 + `pipline.py`オーケストレーション修正 + `config.yaml`整理**
+- [x] **13. FTP入力側の削除 + `pipline.py`オーケストレーション修正 + `config.yaml`整理**
   - **既存タスクとの関係**: タスク0（`[x]`完了済み）が追加した`common.skip_download`ガード付きのFTP経路を
-    含め、入力側FTPを本タスクで全削除する（タスク0の成果は本タスクで置き換わる）。
-  - `training/dataset/ftp_download.py`（`FTPManager`/`MultiFTPManager`）・`training/utils/ftp_common.py`
-    （`AnnotationDownloader`等）を削除。`training/dataset/__init__.py`のre-exportを追随修正。
-  - `training/pipline.py`: 22行目の`from dataset import DatasetManager, MultiFTPManager`から`MultiFTPManager`を除去、
-    `__init__`の`self.ftp_manager = MultiFTPManager(self.cfg)`（147行）を削除、`execute()`内のDLループ（168-176行）を
-    export_root参照呼び出しに置換。**出力側FTP（`deploy.upload_model`・260-274行）は変更しない**。
-  - `training/conf/config.yaml`: `download_dir`（18行）・`ftp_common`（28-29行）・`ftp_hosts`（32行）を削除し、
-    `common.export_root`/`common.dataset_id_monochro`/`common.dataset_id_color`/`common.margin_export_root`/
-    `common.dataset_id_monochro_margin`のCLIオーバーライド用キーを追加。
-  - テスト: 検証基準8（`ftp_download.py`/`ftp_common.py`への参照が残っていないことをgrepで確認）・
+    含め、入力側FTPを本タスクで全削除する（タスク0の成果は本タスクで置き換わる。`skip_download`キー自体は
+    backendのCLI override互換のため残すが、コード上はno-op化）。
+  - `training/dataset/ftp_download.py`（`FTPManager`/`MultiFTPManager`）を削除。`training/utils/ftp_common.py`は
+    `AnnotationDownloader`・`GOOD_KINDS`/`DEFECT_KINDS`のみ削除し、出力側で使う`upload_file_to_ftp`等は残す。
+    `training/dataset/__init__.py`のre-exportを追随修正。`training/tests/dataset/test_ftp_download.py`も削除。
+  - `training/pipline.py`: `MultiFTPManager`のimport・`__init__`の`self.ftp_manager`・`execute()`内のFTP DLループを削除。
+    **出力側FTP（`deploy.upload_model`）は変更しない**。
+  - `pipeline_mode=stage_only`モード（`2_staging`廃止に伴い実装が壊れるため）はユーザー承認により削除。
+    **フォローアップ（未対応）**: `docs/superpowers/specs/2026-07-21-training-modular-monolith-migration-design.md`・
+    `docs/reference/retraining-integration-answers.md`が`pipeline_mode=<train|stage_only>`を
+    pipeline-edge契約として明文化したままになっている。次にこれらのドキュメントに触る際は
+    stage_only削除を反映すること。
+  - `training/conf/config.yaml`: `download_dir`・`staging_dir`（`utils/paths.py`の`_KEYS`からも削除）・`ftp_common`
+    （入力側local_root）を削除し、`common.export_root`/`common.dataset_id_monochro`/`common.dataset_id_color`/
+    `common.margin_export_root`/`common.dataset_id_monochro_margin`のCLIオーバーライド用キーを追加。
+    **`ftp_hosts`は出力側`deploy.upload_model`が使うため削除せず維持**（当初「入力側専用」と誤認したが
+    `deploy/ftp_upload.py`が読んでいることをコミット前に確認し復元）。
+  - テスト: 検証基準8（`ftp_download.py`/`AnnotationDownloader`への参照が残っていないことをgrepで確認）・
     検証基準9（`deployment_service.py`側の出力FTPテストに変更が及んでいないことを確認）。
   - Refs: 決定10, 12 ／ commit: `refactor(training-pipline): FTP入力側を削除しexport_root参照へ一本化`
 

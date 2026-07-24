@@ -19,7 +19,7 @@ from train import train_color, train_monochro
 from model_handler import ONNXModelHandler
 import deploy
 from evaluation import Evaluator
-from dataset import DatasetManager, MultiFTPManager
+from dataset import DatasetManager
 
 
 def build_sub_cfg(cfg, mode, gpu_id=0):
@@ -127,7 +127,10 @@ def _spawn_with_gpu_env(target, args, physical_gpu_id):
     orig_cvd = os.environ.get('CUDA_VISIBLE_DEVICES')
     os.environ['CUDA_VISIBLE_DEVICES'] = str(physical_gpu_id)
     try:
-        p = multiprocessing.Process(target=target, args=args)
+        # プラットフォームのデフォルト start method (Linux は 'fork') に依存しない。
+        # fork 前に親プロセスで CUDA が初期化されていると、子プロセスで
+        # "Cannot re-initialize CUDA in forked subprocess" が発生するため、明示的に spawn を使う。
+        p = multiprocessing.get_context("spawn").Process(target=target, args=args)
         p.start()
         return p
     finally:
@@ -141,58 +144,28 @@ class TrainingPipeline:
     def __init__(self, cfg):
         self.cfg = cfg
         self.dataset_manager = DatasetManager(self.cfg)
-        self.ftp_manager = MultiFTPManager(self.cfg)
 
     def execute(self):
         """パイプラインを実行する。
 
-        pipeline_mode=stage_only: FTP取得 + 前処理 (pool/staging 振り分け) のみ実施。
-        pipeline_mode=train: split → 並列学習 → ONNX → 評価 → アップロード まで実施。
+        export_root（別機能が生成済み）→ pool振り分け → split → 並列学習 → ONNX → 評価 → アップロード。
         """
-        mode = self.cfg.common.get("pipeline_mode", "train")
         color = str(self.cfg.common.target_color)
-        print(f"学習パイプラインを開始します (mode={mode}, color={color})...")
+        print(f"学習パイプラインを開始します (color={color})...")
 
         # 1. バックアップ
         print("バックアップ作成中...")
         self.dataset_manager.backup_model()
         print("バックアップ完了")
 
-        # 2. FTP ダウンロード (color/monochro どちらも good+defect を集約取得)
-        # stage_only モードでは 1_download に手動配置した既存データを使うためスキップする
-        # (新仕様では rmtree しないので技術的には実行可能だが、人手配置ユースケースを尊重)
-        # skip_download=true でも DL をスキップする (ver2 連携: 画像は別機能が 1_download に事前配置)
-        skip_download = self.cfg.common.get("skip_download", False)
-        if mode == "stage_only":
-            print("stage_only モード: FTP ダウンロードをスキップし、既存の 1_download を使用します")
-        elif skip_download:
-            print("skip_download=true: FTP ダウンロードをスキップし、既存の 1_download を使用します")
-        else:
-            for sub_mode in ["monochro", "color"]:
-                self.cfg.common.mode = sub_mode
-                self.ftp_manager.download_images()
-
-        # 3. 前処理 (color/monochro どちらも pool/staging へ振り分け)
+        # 2. 前処理 (export_root → pool へ振り分け。画像取得は別機能が export_root に生成済み)
         self.dataset_manager.process_annotated_images()
 
-        if mode == "stage_only":
-            staging_color = os.path.join(self.cfg.common.staging_dir, color, "color")
-            staging_mono = os.path.join(self.cfg.common.staging_dir, color, "monochro")
-            color_count = len(os.listdir(staging_color)) if os.path.isdir(staging_color) else 0
-            mono_count = len(os.listdir(staging_mono)) if os.path.isdir(staging_mono) else 0
-            print(
-                f"stage_only モード:\n"
-                f"  color staging: {color_count} 件 ({staging_color})\n"
-                f"  monochro staging: {mono_count} 件 ({staging_mono})\n"
-                f"人手レビュー後、train モードで再実行してください。"
-            )
-            return
-
-        # 4. split_pool_to_dataset (color + monochro)
+        # 3. split_pool_to_dataset (color + monochro)
         self.dataset_manager.split_pool_to_dataset(color, mode="color")
         self.dataset_manager.split_pool_to_dataset(color, mode="monochro")
 
-        # 5. MLflow Manager 生成 (color または monochro の mlflow.enabled=true 時)
+        # 4. MLflow Manager 生成 (color または monochro の mlflow.enabled=true 時)
         color_mlflow_enabled = self.cfg.color.mlflow.get("enabled", False)
         monochro_mlflow_enabled = self.cfg.monochro.mlflow.get("enabled", False)
         if color_mlflow_enabled:
@@ -206,7 +179,7 @@ class TrainingPipeline:
         else:
             mgr_monochro = None
 
-        # 5b. 並列 or 直列学習
+        # 4b. 並列 or 直列学習
         # MLflow 有効時 (どちらか一方でも) は multiprocessing で mgr を渡せないため自動的に直列化
         parallel = self.cfg.common.get("parallel_train", True)
         any_mlflow = color_mlflow_enabled or monochro_mlflow_enabled
@@ -253,7 +226,7 @@ class TrainingPipeline:
             run_trainer(self.cfg, "monochro", 0, mgr=mgr_monochro)
             run_trainer(self.cfg, "color", 0, mgr=mgr_color)
 
-        # 6. ONNX エクスポート + 評価 (両 mode) + アップロード
+        # 5. ONNX エクスポート + 評価 (両 mode) + アップロード
         # skip_upload=true では FTP 配信をスキップする (ver2 連携: 配信は deployment_service が担う)
         skip_upload = self.cfg.common.get("skip_upload", False)
         for sub_mode in ["monochro", "color"]:

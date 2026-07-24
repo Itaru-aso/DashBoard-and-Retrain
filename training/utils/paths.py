@@ -16,8 +16,6 @@ from omegaconf import OmegaConf
 # common の論理名 -> 返り値属性名
 _KEYS = (
     "pretraining_dir",
-    "download_dir",
-    "staging_dir",
     "pool_base",
     "dataset_path",
     "splits_dir",
