@@ -306,7 +306,7 @@
     `compute_anomaly_score`自体がmode非依存のため変更不要（既存green維持を確認）。
   - Refs: 決定3 ／ commit: `fix(training-model): cand1ゲートをモード非依存化`
 
-- [ ] **21. `training/train/color.py`: cand1較正ブロックの追加（config opt-in）**
+- [x] **21. `training/train/color.py`: cand1較正ブロックの追加（config opt-in）**
   - `train_color()`末尾の閾値計算後に、`cfg.get('candidate1', {}).get('enabled', False)`が`true`の場合のみ
     cand1較正を実行し`para.json`に`cand1_enabled`/`cand1_mu`/`cand1_sigma`/`cand1_A`/`cand1_Z`/`cand1_T`を
     保存する（`monochro.py`のL706-733相当のロジックをcolor用に実装。`monochro.py`自体は変更しない）。

@@ -26,6 +26,8 @@ from sklearn.metrics import roc_auc_score, average_precision_score, f1_score, pr
 from omegaconf import DictConfig
 from utils.channel_weights import compute_channel_weights
 from utils.edge_mask import slice_edge_excluded
+from utils.candidate1_calib import (
+    compute_mu_sigma, raw_map_max, zscore_map_max, calib_AZ)
 import glob
 
 # constants
@@ -94,6 +96,43 @@ def _resolve_teacher_weights_path(cfg) -> str:
     w = int(cfg.image_size_width)
     fname = f'{h}_{w}_teacher_{model_size}_color_{backbone}_final_state.pth'
     return os.path.join(pretraining_dir, fname)
+
+
+def _calibrate_cand1(
+    cand1_maps, sigma_smooth=1, sigma_floor_pct=None, fpr=0.5
+):
+    """良品スコアマップ列から candidate1 (z-score OR) 較正値を計算する。
+
+    color の異常スコア算出方式へのcandidate1導入パイロット（config opt-in時のみ呼ばれる）。
+    `training/train/monochro.py` の較正ロジック（L706-733相当）と同じ数式
+    （`utils/candidate1_calib.py`）を用いるが、`monochro.py` 自体は変更しない。
+
+    Args:
+        cand1_maps: 良品検証画像1枚ごとの scored_map（edge_mask適用後の2D numpy配列）のリスト。
+        sigma_smooth: σマップの空間平滑化窓。1以下は無効。
+        sigma_floor_pct: σの下限パーセンタイル。Noneは無効。
+        fpr: raw/z 双方の較正に用いる目標False Positive Rate（%）。
+
+    Returns:
+        para.json に追加する cand1_* キーの dict。
+    """
+    mu, sigma = compute_mu_sigma(
+        cand1_maps, sigma_smooth=sigma_smooth, sigma_floor_pct=sigma_floor_pct
+    )
+    raws = [raw_map_max(m) for m in cand1_maps]
+    zs = [zscore_map_max(m, mu, sigma) for m in cand1_maps]
+    A, Z = calib_AZ(raws, zs, fpr_pct=fpr)
+    return {
+        'cand1_enabled': True,
+        'cand1_mu': mu.tolist(),
+        'cand1_sigma': sigma.tolist(),
+        'cand1_A': float(A),
+        'cand1_Z': float(Z),
+        'cand1_T': 1.0,
+        'cand1_fpr': float(fpr),
+        'cand1_sigma_smooth': int(sigma_smooth),
+        'cand1_sigma_floor_pct': sigma_floor_pct,
+    }
 
 
 def train_color(cfg: DictConfig, mgr=None):
@@ -466,9 +505,18 @@ def train_color(cfg: DictConfig, mgr=None):
                 }
     para_json.update(channel_weights_info)
 
+    # candidate1 (z-score OR) は config opt-in（デフォルト無効）。color の異常スコア算出方式への
+    # candidate1導入パイロット（color_no=001限定・.kiro/specs/retraining/color-anomaly-score-cand1-pilot.md）。
+    candidate1_cfg = cfg.get('candidate1', {}) if hasattr(cfg, 'get') else {}
+    cand1_enabled_opt_in = (
+        bool(candidate1_cfg.get('enabled', False)) if candidate1_cfg else False
+    )
+
     # F1最大化閾値の計算（validation setから）
     print('閾値計算中...')
     scores_val = []
+    # candidate1較正用: per-imageのscored_map（edge_mask適用後, 2D）。opt-in時のみ収集。
+    cand1_maps = []
     for image, _ in tqdm(validation_loader, desc='Computing threshold scores'):
         if on_gpu:
             image = image.to(device)
@@ -486,12 +534,29 @@ def train_color(cfg: DictConfig, mgr=None):
         scored_map = slice_edge_excluded(scored_map, edge_mask_w)
         score = scored_map.max().item()
         scores_val.append(score)
+        if cand1_enabled_opt_in:
+            for b in range(scored_map.shape[0]):
+                cand1_maps.append(scored_map[b, 0].detach().cpu().numpy())
 
     # 正常画像のスコア分布から閾値設定（99.5パーセンタイル）
     scores_np = np.array(scores_val)
     threshold_val = float(np.quantile(scores_np, 0.995))
     para_json['threshold'] = threshold_val
     print(f'閾値: {threshold_val:.6f} (validation 99.5パーセンタイル)')
+
+    if cand1_enabled_opt_in:
+        try:
+            cand1_result = _calibrate_cand1(
+                cand1_maps,
+                sigma_smooth=int(candidate1_cfg.get('sigma_smooth', 1)),
+                sigma_floor_pct=candidate1_cfg.get('sigma_floor_pct', None),
+                fpr=float(candidate1_cfg.get('fpr', 0.5)),
+            )
+            para_json.update(cand1_result)
+            print(f'候補1較正(color): A={cand1_result["cand1_A"]:.4f} '
+                  f'Z={cand1_result["cand1_Z"]:.3f} (fpr={cand1_result["cand1_fpr"]}%)')
+        except Exception as e:
+            print(f'⚠️ 候補1較正に失敗 (raw のみで継続): {e}')
 
     with open(os.path.join(train_output_dir, 'para.json'), 'w', encoding='utf-8') as para_file:
         json.dump(para_json, para_file, indent=4, default=numpy_encoder, ensure_ascii=False)
