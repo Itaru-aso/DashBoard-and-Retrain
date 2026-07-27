@@ -1,4 +1,4 @@
-# training/ データセット参照方式の変更（FTP→export_root） v1.4
+# training/ データセット参照方式の変更（FTP→export_root） v1.7
 
 > 位置づけ: `retraining` spec の `design.md` を上書きせず、データ取得元の切替に関する意思決定記録（ADR相当）として独立管理する。
 > 注意: 本ドキュメントで削除対象とする FTP は **training/ が学習用画像を取得する入力側FTP**
@@ -80,13 +80,12 @@
     - **座標系は生センサー座標系のまま**（`process_image`のmonochro crop式`(485+crop_offset_x, 0, 1250, height)`がそのまま有効。座標の再基準・crop式の変更は不要）。
     - 余白は`crop_shift_max_px`（既定20px）以上を持つこと。
     - 上記2点（未分割・生センサー座標系）が確認済みのため、**`RawShiftImageFolder`/`process_image`のcrop式自体は変更不要**。変更が必要なのは`raw_image_root`の参照先（`1_download`→マージンありexportの解決済みパス）のみ。
-19. **train/val/testのマージ方式**:
+19. **train/val/testのマージ方式**（v1.7で決定19後半を上書き。§「validationデータ不足への対応」参照）:
     - **モノクロは one-class 異常検知（good画像のみで学習）であることを確認済み**（`use_raw_shift_dataset=true`時の現行`RawShiftImageFolder`はtrain/valともに`good`のみを読む。defect画像はmonochroの学習には使わない、既存動作を維持）。したがって本設計のmonochro向けマージも**on_class=0（good）カテゴリの画像のみ**を対象とする。マージンあり画像側・export_root側とも、defectカテゴリ（on_class=1）はmonochroのDataLoaderには渡さない。
-    - **train** = マージンありデータのgood画像全量（見つかった場合。`RawShiftImageFolder`で毎回±20pxランダムシフトして使用） + export_root（マージンなし）のgood画像のtrain分（`pool_train_ratio`で分割したtight画像をそのまま使用、シフトなし）。
-    - **val/test** = export_root（マージンなし）のgood画像のtest分のみを使用する（既存の「rawをoffset=0でクロップしてval用にする」処理は不要。export_rootのtight画像がすでに推論時と同一クロップのため直接使える）。
-    - マージンあり側にtrain/test分割は不要（全量train）。
+    - **train** = マージンありデータのgood画像の`pool_train_ratio`分（見つかった場合。`RawShiftImageFolder`で毎回±20pxランダムシフトして使用） + export_root（マージンなし）のgood画像のtrain分（`pool_train_ratio`で分割したtight画像をそのまま使用、シフトなし）。
+    - **val/test** = export_root（マージンなし）のgood画像のtest分 + マージンありデータのgood画像の残り（`pool_train_ratio`の残り分。offset=0固定でクロップ、位置ズレ頑強性はtrain側のシフトaugmentationのみで獲得されるためval側は推論時と同一の分布に揃える）。**v1.2〜v1.6時点では「マージンあり側にtrain/test分割は不要（全量train）」だったが、v1.7でこれを撤回し分割対象に変更した**（理由はv1.7セクション参照）。
     - **defect画像の扱い**: `dataset/manager.py`が構築するdefect_pool自体は（他用途・color側等のため）維持するが、monochroのDataLoader構築ではdefect_poolを参照しない。colorは既存どおりgood+defectの二値分類を維持し、本設計による変更はない。
-    - **実装上の注意**: 現行の`use_raw_shift_dataset=true`時のmonochro.pyは`split_manager`（`split_pool_to_dataset`の出力）を使わず、生画像を`torch.randperm`で独自にtrain/val分割している（`monochro.py:187-190`）。本設計はこれを**製品ID単位グルーピング済みのexport_root test分**に置き換えるものであり、「既存のsplit_managerをそのまま流用」は監視の意味では正しいが、raw-shiftモードのmonochro.pyにとっては**新規利用**（挙動変更）である。実装時にrandperm分割ロジックの置き換えとして扱うこと。
+    - **実装上の注意**: `use_raw_shift_dataset=true`時のmonochro.pyは`split_manager`（`split_pool_to_dataset`の出力）を使わず、マージンあり画像を`torch.randperm`で独自にtrain/val分割している（`_build_datasets`内）。export_root（マージンなし）側は`split_manager`経由の既存train/test分割（`pool_train_ratio`）をそのまま使う。
 20. **CLAUDE.md例外の再拡張（DataLoader構築部分）**: 上記のマージ処理は`training/train/monochro.py`の`RawShiftImageFolder`呼び出し方式・DataLoader構築部分の変更を伴う。決定12の例外を、**DataLoader構築部分（マージンあり/なしデータの合体ロジック）に限り**再拡張する。**学習アルゴリズム本体（損失関数・モデル構造・学習ループ・color側の学習ロジック）は引き続き対象外・変更不可**。ユーザー承認済み。
 
 ### ONNX保存パスのタプル管理（v1.4 新規）
@@ -102,6 +101,12 @@
     - **注意（確認済み・2026-07-24）**: エッジPC側の検査アプリケーション（本リポジトリ外）を、新ファイル名（フルタプルベース）を読み込めるようユーザー側で改修し、本番検査PC全台への反映・確認を完了した（ユーザー確認）。`tape`が空文字の場合に生じる二重アンダースコア（例: `501_05_CZT8__monochro_model.onnx`）についても実機で問題なく読み込めることを確認済み。これにより決定21〜22と同様、決定23も実装可能となった。
 24. **`_run_job`のtape配線**: 決定14で配線するsize/chainに加え、`tape`も`_run_job`内で保持し、完了後のパス解決（決定22）・配信ファイル名解決（決定23）に使用する。
 
+### validationデータ不足への対応（v1.7 新規）
+25. **背景**: retrain_app_CW（旧実装）とtraining/（新実装）で同じcolor（001, monochro）を学習しparaを比較したところ、q_st_end（-11%）・threshold（約1/2）・cand1_Z（約1/3）・cand1_A（-39%）と、キャリブレーション定数に大きなズレが実測された。teacher_mean/stdはほぼ一致（分布自体は同等）していたため、原因はteacher-studentの学習品質ではなく、キャリブレーション（`q_st_start/end`・cand1の`mu/sigma/A/Z`・threshold）を算出するvalidationセットのサイズにあると特定した。決定19（v1.2〜v1.6）ではvalidationがexport_root（マージンなし）のtest/goodのみで、実測（color=001）では**36枚**しかなく、marginデータ（同色1998枚）は全量trainに回されvalには一切使われていなかった。
+26. **決定: マージンデータもtrain/valに分割する**。分割比率は既存の`pool_train_ratio`（monochro設定、既定0.7）を流用し、新規の設定キーは追加しない。決定19の「マージンあり側にtrain/test分割は不要（全量train）」を本決定で上書きする。
+27. **val側のマージンサンプルはcrop_offset=0固定とする**（train側のみ`crop_shift_max_px`のランダムshiftを適用）。理由: シフトへの頑強性はtrain側augmentationのみで獲得され、val/calibration側は推論時の実分布（C#側は常にoffset=0）と一致させる必要があるため。位置ズレ耐性と検出性能はどちらもこの方式で両立する（トレードオフではない）。
+28. **分割の実装方式**: 同じ`margin_root`を参照する`RawShiftImageFolder`を2つ作る（train用: `crop_shift_max_px`、val用: `crop_shift_max_px=0`）。`full_size = len(margin_train_full)`に対し`torch.randperm(full_size, generator=seed固定)`でインデックスをシャッフルし、`pool_train_ratio`で分割した上で`Subset`を適用する（旧CW実装の`train_full`/`val_full`分割パターンと同一）。`RawShiftImageFolder`/`process_image`自体は無改修（決定18を維持）。
+
 ## 却下した代替案
 - **app_dbに直接問い合わせる案（dataset/dataset_category_itemテーブル）**: 当初この案で進めていたが、metadata.jsonに同等の情報（size/chain/mode・on_class）が既に含まれることが判明。データセット総数20未満・低頻度更新という規模では、新規DBモデル・Repository・問い合わせコードを追加するコストが、ファイル走査のコストを上回るため不採用。
 - **training/ が app_db に直接接続する案**: training/へDB依存を追加すると、CLAUDE.mdの「training/は学習ロジックのみ・DB非依存」というアーキテクチャ境界をさらに広く破ることになるため却下。
@@ -110,6 +115,9 @@
 - **マージンあり画像1種類だけをexportし、offset=0/±20pxの両方をRawShiftImageFolderからサンプリングして「マージンなし」相当も代替する案**: シンプルだが、運用段階でマージンありデータの新規取得が止まる（検証段階の固定プールのみ）ため、長期的にtightデータの供給元をマージン画像に依存し続けることができない。マージンなしデータ（export_root）は別途・継続的に必要であり不採用。
 - **training側でパディング・ゼロパッドによる合成シフトでマージンを代用する案（案B）**: 自己完結だが、crop境界（x=485付近）に人工画素を注入するため検査精度への影響が読めず、また実在するマージン画素を使う方針（ユーザー判断）と矛盾するため不採用。
 - **合成シフトを廃止し自然な位置分散のみに依存する案（案C）**: シフトaugmentationの目的が「カメラ取付・製品位置ズレという特定の分散源を吸収するため」であり、単なるデータ量確保が目的ではないため、代替なしに廃止すると位置ズレ耐性の低下リスクがあり不採用。
+- **（v1.7）val側のマージンサンプルもランダムshiftを残す案**: 実装は単純だが、推論時に発生しない「ズレたクロップ」をcalibration統計に混入させることになり、キャリブレーションが本番分布からズレる。頑強性向上には寄与しない（頑強性はtrain側のみで決まる）ため不採用。
+- **（v1.7）margin専用の新規分割比率キー（`margin_train_ratio`等）を新設する案**: 設定項目を増やす理由がなく、既存の`pool_train_ratio`（7:3という運用上の意味）と統一する方が理解しやすいため不採用。
+- **（v1.7）画像パス単位でtop/bottomを分離しないようグルーピングしてから分割する案**: 旧CWの挙動（サンプル単位でランダム分割、top/bottomがtrain/valに分かれる可能性あり）と非対称になり実装も複雑化するため、今回は旧CWと同じサンプル単位分割を採用（top/bottom分離の厳密化は本タスクの対象外）。
 
 ## 制約 / 非目標
 - **非目標**: export_root および export_root_margin の生成（書き出し）処理の実装。これらは別機能のスコープ。
@@ -120,6 +128,8 @@
 - **前提**: metadata.jsonの`name`の一意性（同一(mode,size,chain)に対し常に1つのdataset_idのみ存在）はexport_root生成側の仕様保証に依存する。
 - **前提**: 検証段階のマージンプールと運用段階のexport_root（マージンなし）は、時期・対象が完全に分離しており製品レベルで重複しない（train/testリークなし）。ユーザー確認済み。この前提が崩れた場合は製品ID基準の重複除外ロジックの追加検討が必要。
 - **制約**: ONNX保存はタプル単位で最新のみ保持する（決定22）。同一(color_no,size,chain,tape)への複数回再学習は、過去のONNXを意図的に上書きする仕様であり、ジョブ単位の履歴保持は本設計の対象外。
+- **（v1.7）非目標**: `RawShiftImageFolder`・`process_image`自体の変更（クロップ式・分割ロジックは対象外）。`pool_train_ratio`のデフォルト値変更（0.7を維持）。
+- **（v1.7）既存モデルへの影響**: 既存の学習済みモデル（`6_model/*/monochro/para.json`）は本変更を反映していないため、本変更後は再学習が必要になる（キャリブレーション値が変わるため）。
 
 ## 検証基準
 - export_root/export_root_marginの生成処理は対象外のため、E2Eでの実データ検証は不可。以下のフィクスチャベースの検証で完成を判断する：
@@ -128,8 +138,8 @@
   3. `common.target_color`の値と`binary/{color_no}/`フォルダ名が一致しない場合に、明確なエラー（サイレントな0件処理ではない）になることを確認する。
   4. backend側：`TRAINING_EXPORT_ROOT`／`TRAINING_MARGIN_EXPORT_ROOT`配下を走査し`(mode,size,chain)`→`dataset_id`を解決する単体テスト（フィクスチャディレクトリ・複数metadata.jsonを用意）。マージン側が見つからないケース（該当色番のフォルダが存在しない）で空文字にフォールバックし、非致命的に処理が継続することを確認する。
   5. `training_service.py`の`_run_job`/`build_command`が、DBから取得したsize/chainを使ってdataset_id解決結果を正しくCLI overrideに組み立てることの単体テスト（`common.export_root`/`common.dataset_id_monochro`/`common.dataset_id_color`/`common.margin_export_root`/`common.dataset_id_monochro_margin`）。
-  6. monochroのDataLoader構築で、マージンデータが存在する場合に`RawShiftImageFolder`（マージンあり・goodのみ・±20pxシフト）とexport_root（マージンなし・good・train分・シフトなし）が正しく合体されること、マージンデータが存在しない場合はexport_rootのみで学習が継続すること、**defectカテゴリの画像がmonochroのDataLoaderに一切含まれないこと**をフィクスチャで確認する。
-  7. val/testがexport_root（マージンなし・good）のtest分のみから構築され、マージンデータ・defect画像を含まないことを確認する。
+  6. monochroのDataLoader構築で、マージンデータが存在する場合に`RawShiftImageFolder`（マージンあり・goodのみ・train分は±20pxシフト）とexport_root（マージンなし・good・train分・シフトなし）が正しく合体されること、マージンデータが存在しない場合はexport_rootのみで学習が継続すること、**defectカテゴリの画像がmonochroのDataLoaderに一切含まれないこと**をフィクスチャで確認する。
+  7. （v1.7で更新）val/testがexport_root（マージンなし・good）のtest分と、マージンデータの`pool_train_ratio`残り分（offset=0固定）の合成から構築されること、defect画像を含まないこと、`pool_train_ratio`を変えるとマージンのtrain/val分割数が追従することをフィクスチャで確認する。マージンデータが存在しない場合はexport_root（マージンなし・good）のtest分のみで構成され、変更前と同じ挙動を維持することを確認する。
   7b. colorのDataLoader構築（good+defect二値分類）が本設計により変更されていないことを確認する（既存テストのgreen維持）。
   11. `TrainingConfig`が(color_no,size,chain,tape,mode)から最終ONNXパスを正しく組み立てること（tape空文字ケースを含む）を単体テストで確認する。
   12. `_run_job`完了処理が、ステージングパスから最終パスへファイルを移動し、`mark_completed`に最終パスを渡すことをフィクスチャ（一時ファイル）で確認する。同一タプルで2回連続完了させた場合、2回目の最終ファイルが1回目を正しく上書きすることを確認する。
@@ -160,3 +170,19 @@
   に対応するよう改修し、本番検査PC全台への反映・確認を完了。tapeが空文字の場合の二重アンダースコア
   （`501_05_CZT8__monochro_model.onnx`）も実機で確認済みとの回答を得たため、タスク18（`deployment_service.py`の
   `_remote_name`変更）を実装した。
+- [2026-07-27] v1.7 retrain_app_CW（旧実装）とtraining/（新実装）で同色（001, monochro）を学習しparaを比較した
+  結果、q_st_end・threshold・cand1のA/Zに大きなズレ（最大約3倍）を実測。teacher_mean/stdはほぼ一致していたため、
+  原因をvalidationデータ不足（export_root test/goodのみでcolor=001は実測36枚）と特定した。決定19の
+  「マージンあり側にtrain/test分割は不要（全量train）」を上書きし、マージンデータも`pool_train_ratio`で
+  train/valに分割する設計に変更（決定25〜28）。val側のマージンサンプルはoffset=0固定（train側のみランダム
+  shift）とし、推論時分布とのキャリブレーション整合を優先。分割は旧CW実装の`train_full`/`val_full`インデックス
+  分割パターンを復活させる形で実装（`RawShiftImageFolder`自体は無改修）。既存の学習済みモデルは本変更後に
+  再学習が必要になることを明記。`training/train/monochro.py::_build_datasets`・
+  `tests/train/test_monochro_export_root_margin.py`を実装・更新し、既存59件を含む`training/tests/`は
+  無改修分もすべてgreenのまま維持。
+  なお実装直後、`utils/image_preprocessing.py`のmonochro crop幅コメント「TEMP crop1250 (要revert→1200 /
+  C#整合は1200)」がv1.7の変更（marginをvalにも使うようになったことで、この幅がキャリブレーションにも
+  影響し得る）と関連しうる懸念として提起されたが、ユーザーに実機C#ソース（Class1.cs）を確認してもらった
+  結果、C#側も現在`new Rect(485, 0, 1250, height)`であり、Python側の1250と一致していることが判明。古い
+  コメント（1200時代の名残）が誤って残っていただけで、実際のパリティ上の問題は無かった。コメントを
+  「2026-07-27にC#側と一致確認済み」に修正した（動作変更なし）。

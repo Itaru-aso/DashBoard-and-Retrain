@@ -26,7 +26,8 @@ def process_image(image_data, image_size_width, image_size_height, mode, crop_of
 
     if mode == "monochro":
         # crop_offset_x は monochro のみ適用 (撮像系の水平シフト不変性獲得用)
-        crop_rectangle = (485 + crop_offset_x, 0, 1250, read_img.shape[0])  # TEMP crop1250 (要revert→1200 / C#整合は1200)
+        # w=1250 は C# 推論側 (Class1.cs: new Rect(485, 0, 1250, height)) と2026-07-27にユーザー確認済み一致
+        crop_rectangle = (485 + crop_offset_x, 0, 1250, read_img.shape[0])
     elif mode == "color":
         # color は crop_offset_x を無視 (C# 推論側との完全整合を保ち、撮像分布も安定)
         read_img = cv2.rotate(read_img, cv2.ROTATE_90_CLOCKWISE)

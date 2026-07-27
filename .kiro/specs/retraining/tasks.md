@@ -217,6 +217,11 @@
   - train = マージンありgood画像全量（見つかった場合。±crop_shift_max_pxランダムシフト）
     + tight train（シフトなし）。val = tight testのみ（マージン混入なし）。旧`torch.randperm`独自
     80/20分割は撤廃し、export_rootの既存train/test分（`split_pool_to_dataset`の出力）を使う置き換えとして扱った。
+    （**2026-07-27追記**: retrain_app_CWとのpara.json比較でthreshold/cand1のキャリブレーション定数に
+    大きなズレを実測し、原因をvalidationデータ不足（tight testのみ・実測36枚）と特定。`dataset-export-
+    root-migration.md` v1.7（決定19上書き・決定25〜28）により、マージンあり画像も`pool_train_ratio`で
+    train/valに分割する設計に変更した。val側のマージン分はoffset=0固定。本行の「val = tight testのみ
+    （マージン混入なし）」はタスク16時点の記述として保持し、現行動作はv1.7を正とする）
   - defectカテゴリ（on_class=1）はmonochroのDataLoaderに一切含めない（マージン側はgoodカテゴリのみ解決、
     export_root側もtrain/good・test/good/imagesのみ参照）。colorのDataLoader構築・学習ロジックは無変更
     （`color.py`は今回未編集）。

@@ -32,10 +32,11 @@ def _write_margin_metadata(margin_root, dataset_id, categories):
         json.dump({"id": dataset_id, "name": "monochro_5_YY", "category": categories}, f)
 
 
-def _cfg(margin_export_root="", dataset_id_monochro_margin=""):
+def _cfg(margin_export_root="", dataset_id_monochro_margin="", pool_train_ratio=0.7):
     return OmegaConf.create({
         "margin_export_root": margin_export_root,
         "dataset_id_monochro_margin": dataset_id_monochro_margin,
+        "pool_train_ratio": pool_train_ratio,
     })
 
 
@@ -82,7 +83,9 @@ class TestResolveMarginGoodRoot:
 
 
 class TestBuildDatasetsRawShift:
-    """検証基準6・7: use_raw_shift=True 時の train/val Dataset合体。"""
+    """検証基準6・7 (dataset-export-root-migration.md v1.7 で更新):
+    use_raw_shift=True 時の train/val Dataset合体。マージンあり画像は
+    pool_train_ratioでtrain/valに分割され、val側はoffset=0固定になる。"""
 
     def _make_dataset_path(
         self, tmp_path, n_train_good=3, n_test_good=2, n_train_defect=0, n_test_defect=0
@@ -130,7 +133,8 @@ class TestBuildDatasetsRawShift:
         # defect: margin側にも紛れ込ませて、混入しないことを確認する
         _write_fake_image(
             os.path.join(margin_root, "ds-margin-1", "binary", "001", "cat-defect", "raw_d.bmp"))
-        cfg = _cfg(margin_export_root=margin_root, dataset_id_monochro_margin="ds-margin-1")
+        cfg = _cfg(margin_export_root=margin_root, dataset_id_monochro_margin="ds-margin-1",
+                   pool_train_ratio=0.7)
 
         train_set, validation_set, full_train_set = _build_datasets(
             cfg, dataset_path, "001", train_tf=None,
@@ -138,18 +142,22 @@ class TestBuildDatasetsRawShift:
             image_size_width=16, image_size_height=16, seed=42,
         )
 
-        # マージン(2枚→top/bottom4件) + tight train(3件) = 7件。defectは含まれない。
-        assert len(train_set) == 7
-        # validationはexport_root(マージンなし)のtest/goodのみ（マージン混入なし）。
-        assert len(validation_set) == 2
+        # マージン(2枚→top/bottom4件)はpool_train_ratio=0.7でtrain=2/val=2に分割される。
+        # train = マージンtrain(2) + tight train(3) = 5。defectは含まれない。
+        assert len(train_set) == 5
+        # validation = マージンval(2) + tight test/good(2) = 4。
+        assert len(validation_set) == 4
         assert len(full_train_set) == len(train_set)
-        # crop_shift_max_pxがRawShiftImageFolderまで正しく配線されていること。
-        margin_dataset = train_set.datasets[0]
-        assert margin_dataset.shift_max == 20
+        # crop_shift_max_pxがRawShiftImageFolderまで正しく配線されていること
+        # (train側はshift_max=20、val側はoffset=0固定=shift_max=0)。
+        margin_train_dataset = train_set.datasets[0]
+        assert margin_train_dataset.dataset.shift_max == 20
+        margin_val_dataset = validation_set.datasets[0]
+        assert margin_val_dataset.dataset.shift_max == 0
 
-    def test_validation_set_excludes_margin_data(self, tmp_path):
-        """val/testはexport_root（マージンなし・good）のtest分のみで構成され、
-        マージンデータを含まないこと（検証基準7）。"""
+    def test_validation_set_includes_margin_split(self, tmp_path):
+        """v1.7: val/testはexport_root（マージンなし・good）のtest分と、マージンデータの
+        pool_train_ratio残り分（offset=0固定）の合成になること（検証基準の更新）。"""
         dataset_path = self._make_dataset_path(tmp_path, n_train_good=1, n_test_good=1)
         margin_root = str(tmp_path / "export_root_margin")
         _write_margin_metadata(margin_root, "ds-margin-1", categories=[
@@ -158,16 +166,46 @@ class TestBuildDatasetsRawShift:
         for i in range(5):
             _write_fake_image(
                 os.path.join(margin_root, "ds-margin-1", "binary", "001", "cat-good", f"raw_{i}.bmp"))
-        cfg = _cfg(margin_export_root=margin_root, dataset_id_monochro_margin="ds-margin-1")
+        cfg = _cfg(margin_export_root=margin_root, dataset_id_monochro_margin="ds-margin-1",
+                   pool_train_ratio=0.7)
 
-        _, validation_set, _ = _build_datasets(
+        train_set, validation_set, _ = _build_datasets(
             cfg, dataset_path, "001", train_tf=None,
             use_raw_shift=True, crop_shift_max_px=20,
             image_size_width=16, image_size_height=16, seed=42,
         )
 
-        # マージン側は5枚(raw)→10件相当だが、validation_setは常にtight test/goodのみ=1件。
-        assert len(validation_set) == 1
+        # マージン側は5枚(raw)→10件、pool_train_ratio=0.7でtrain=7/val=3に分割される。
+        # train = マージンtrain(7) + tight train(1) = 8。
+        assert len(train_set) == 8
+        # validation = マージンval(3) + tight test/good(1) = 4。マージン混入なし、ではなく
+        # 意図的にマージンのval分が含まれることを確認する。
+        assert len(validation_set) == 4
+
+    def test_margin_split_ratio_follows_pool_train_ratio(self, tmp_path):
+        """pool_train_ratioを変えるとマージンのtrain/val分割数が追従すること。"""
+        dataset_path = self._make_dataset_path(tmp_path, n_train_good=1, n_test_good=1)
+        margin_root = str(tmp_path / "export_root_margin")
+        _write_margin_metadata(margin_root, "ds-margin-1", categories=[
+            {"category_id": "cat-good", "on_class": "0", "invalid_flg": "0"},
+        ])
+        for i in range(5):
+            _write_fake_image(
+                os.path.join(margin_root, "ds-margin-1", "binary", "001", "cat-good", f"raw_{i}.bmp"))
+        # pool_train_ratio=0.5: マージン10件 -> train=5/val=5。
+        cfg = _cfg(margin_export_root=margin_root, dataset_id_monochro_margin="ds-margin-1",
+                   pool_train_ratio=0.5)
+
+        train_set, validation_set, _ = _build_datasets(
+            cfg, dataset_path, "001", train_tf=None,
+            use_raw_shift=True, crop_shift_max_px=20,
+            image_size_width=16, image_size_height=16, seed=42,
+        )
+
+        # train = マージンtrain(5) + tight train(1) = 6。
+        assert len(train_set) == 6
+        # validation = マージンval(5) + tight test/good(1) = 6。
+        assert len(validation_set) == 6
 
 
 class TestBuildDatasetsLegacySplit:

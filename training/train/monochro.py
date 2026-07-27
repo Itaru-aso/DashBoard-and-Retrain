@@ -174,10 +174,12 @@ def _build_datasets(
     """train/validation/full_train の Dataset を構築する（DataLoader構築部分）。
 
     `use_raw_shift=True`（monochro専用のシフトaugmentation）の場合:
-        train = マージンありgood画像全量（見つかった場合。±crop_shift_max_pxランダムシフト）
-                + export_root（マージンなし）good画像のtrain分（シフトなし）
-        val   = export_root（マージンなし）good画像のtest分のみ
-                （推論時と同一クロップのため直接使える。マージンあり側にtrain/test分割は無い＝全量train）
+        train = マージンありgood画像の`pool_train_ratio`分（見つかった場合。±crop_shift_max_pxランダム
+                シフト） + export_root（マージンなし）good画像のtrain分（シフトなし）
+        val   = マージンありgood画像の残り分（offset=0固定。crop_shift_max_pxによる位置ズレ頑強性は
+                train側のシフトaugmentationのみで獲得されるため、val/calibration側は推論時と同じ
+                offset=0の分布に揃える） + export_root（マージンなし）good画像のtest分（シフトなし）
+        マージンの分割比率は`pool_train_ratio`（monochro設定、既定0.7）を流用する。
         マージンあり画像が見つからない場合は export_root のみで学習を継続する（非致命的フォールバック）。
         defectカテゴリの画像はいずれの経路にも含まれない（マージン側はgoodカテゴリのみ解決し、
         exportRoot側もtrain/good・test/good/imagesのみを参照するため）。
@@ -192,15 +194,18 @@ def _build_datasets(
         tight_train_good = os.path.join(dataset_path, 'train', 'good')
         tight_test_good = os.path.join(dataset_path, 'test', 'good', 'images')
         tight_train_set = _FlatGoodImageFolder(tight_train_good, transform=train_tf)
-        validation_set = _FlatGoodImageFolder(tight_test_good, transform=train_tf)
+        tight_validation_set = _FlatGoodImageFolder(tight_test_good, transform=train_tf)
 
         margin_root = _resolve_margin_good_root(cfg, color_num)
         if margin_root is not None:
+            pool_train_ratio = float(cfg.get('pool_train_ratio', 0.7))
             print(
                 f'[raw_shift_dataset] マージンあり画像から random crop_offset '
-                f'(±{crop_shift_max_px} px) で学習: {margin_root}'
+                f'(±{crop_shift_max_px} px) で学習 (pool_train_ratio={pool_train_ratio}): {margin_root}'
             )
-            margin_train_set = RawShiftImageFolder(
+            # train用 (シフトあり) と val用 (offset=0固定) を同じ画像リストから作り、
+            # インデックスをrandpermで分割する (旧CW実装のtrain_full/val_full分割パターンと同一)。
+            margin_train_full = RawShiftImageFolder(
                 raw_root=margin_root, mode='monochro',
                 image_size_width=image_size_width,
                 image_size_height=image_size_height,
@@ -208,13 +213,31 @@ def _build_datasets(
                 transform=train_tf,
                 seed=seed,
             )
+            margin_val_full = RawShiftImageFolder(
+                raw_root=margin_root, mode='monochro',
+                image_size_width=image_size_width,
+                image_size_height=image_size_height,
+                crop_shift_max_px=0,
+                transform=train_tf,
+                seed=seed,
+            )
+            margin_full_size = len(margin_train_full)
+            margin_train_size = int(pool_train_ratio * margin_full_size)
+            rng = torch.Generator().manual_seed(seed)
+            margin_indices = torch.randperm(margin_full_size, generator=rng).tolist()
+            margin_train_set = torch.utils.data.Subset(
+                margin_train_full, margin_indices[:margin_train_size])
+            margin_val_set = torch.utils.data.Subset(
+                margin_val_full, margin_indices[margin_train_size:])
             train_set = torch.utils.data.ConcatDataset([margin_train_set, tight_train_set])
+            validation_set = torch.utils.data.ConcatDataset([margin_val_set, tight_validation_set])
         else:
             print(
                 '[raw_shift_dataset] マージンあり画像が見つからないため、'
                 'export_root（マージンなし）のみで学習します'
             )
             train_set = tight_train_set
+            validation_set = tight_validation_set
         # 後続コード (teacher_normalization, train_step 計算等) は len(full_train_set) を参照するため保持
         full_train_set = train_set
     else:
@@ -557,8 +580,9 @@ def train_monochro(cfg: DictConfig, mgr=None):
     # raw_shift モード時: teacher_mean/std を推論時分布 (shift=0) で再計算して上書きする。
     # 学習中は augment 込みの統計だったが、channel_weights / 最終 map_normalization /
     # threshold / para.json 保存は「推論時と同じ分布 (C# 側で読まれる値)」で揃えるべき。
-    # validation_loader は export_root（マージンなし）の test/good（シフト無し・推論時と
-    # 同一クロップ）なので、そのままteacherの特徴量統計を取り直せる。
+    # validation_loader は export_root（マージンなし）の test/good と、マージンあり画像の
+    # 残り分（いずれも offset=0 固定・推論時と同一クロップ）の合成なので、そのまま
+    # teacherの特徴量統計を取り直せる。
     if use_raw_shift:
         print('[teacher_renormalization] 推論時分布 (shift=0) で teacher_mean/std を再計算 (channel_weights / threshold 用)')
         teacher_mean, teacher_std = teacher_normalization(teacher, validation_loader)
@@ -569,9 +593,9 @@ def train_monochro(cfg: DictConfig, mgr=None):
     cw_cfg = cfg.get('channel_weights', None)
     if cw_cfg is not None and cw_cfg.get('enabled', False):
         # [データ依存関係 — monochro] channel_weights の入力ソース:
-        #   raw_shift=True  : good は export_root（マージンなし）の test/good（validation_set）
-        #                     から取得し、defect は 3_pool→4_dataset split 済の
-        #                     4_dataset/train/defect から。
+        #   raw_shift=True  : good は export_root（マージンなし）の test/good + マージンあり画像の
+        #                     残り分（いずれも offset=0固定・validation_set）から取得し、defect は
+        #                     3_pool→4_dataset split 済の 4_dataset/train/defect から。
         #   raw_shift=False : 従来どおり 4_dataset/train/{good,defect} から。
         # 不良は raw を上下2分割すると不良箇所の half が不明 → 2_staging 人手triage が必須で、
         # その成果 (3_pool/<color>/monochro/defect_pool→4_dataset/train/defect) だけが defect の供給源。
@@ -584,7 +608,8 @@ def train_monochro(cfg: DictConfig, mgr=None):
         train_path = os.path.join(dataset_path, 'train')
         cw_defect_path = os.path.join(train_path, 'defect')
         if use_raw_shift:
-            # good は export_root（マージンなし）の test/good 由来 (validation_set)。
+            # good は export_root（マージンなし）の test/good + マージンあり画像の残り分
+            # (いずれも offset=0固定) 由来 (validation_set)。
             # defect が無い場合 compute_channel_weights は unsupervised に degrade する。
             weights_np, cw_method, ch_aucs, w_sup = compute_channel_weights(
                 teacher, student, teacher_mean, teacher_std, None, device,
