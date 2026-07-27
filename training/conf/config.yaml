@@ -197,6 +197,14 @@ color:
     blend_scale: 10.0      # sigmoid の遷移急峻さ (大きいほど緩やか)
     max_fpr: 0.05          # pAUC で見る FPR 上限 (運用 FPR=0.03 にマージン)
   edge_mask_w: 2           # 両端 N pixel を loss/quantile/threshold 計算から除外 (padding artifact 抑制)
+  # candidate1 (z-score OR) 較正: color の異常スコア算出方式へのパイロット (config opt-in、既定false)。
+  # 有効化はCLI override (candidate1.enabled=true) で色番号ごとに行う (config.yaml側はデフォルトのまま)。
+  # .kiro/specs/retraining/color-anomaly-score-cand1-pilot.md 決定2, 5
+  candidate1:
+    enabled: false
+    fpr: 0.5
+    sigma_smooth: 7
+    sigma_floor_pct: 50
   cutoff: 0.33
   recall_threshold: 0.8
   pool_train_ratio: 0.7

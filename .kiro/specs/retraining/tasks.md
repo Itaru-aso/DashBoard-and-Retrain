@@ -320,7 +320,7 @@
     未テスト対象のまま）。
   - Refs: 決定2, 5 ／ commit: `feat(training-color): cand1較正ブロックの追加（config opt-in）`
 
-- [ ] **22. `training/conf/config.yaml`: `candidate1`設定の追加**
+- [x] **22. `training/conf/config.yaml`: `candidate1`設定の追加**
   - `candidate1: {enabled: false, fpr: 0.5, sigma_smooth: 7, sigma_floor_pct: 50}`をデフォルト追加
     （`enabled: false`のため他color_noへの影響なし）。color_no=001のパイロット学習時のみ
     CLIオーバーライド（`candidate1.enabled=true`）で有効化する。
