@@ -327,14 +327,16 @@
   - テスト: 既存configロード系テストのgreen維持を確認（新規テストは不要、設定値追加のみ）。
   - Refs: 決定2, 5 ／ commit: `chore(training-conf): candidate1設定のデフォルト追加`
 
-- [ ] **23. （手動検証）color_no=001の実学習によるFPR/検知率の確認**
-  - `candidate1.enabled=true`で color_no=001 を実学習し、生成された`para.json`のFPR/検知率を既存欠陥
-    テストセット（`4_dataset/001/color/test/defect`、43枚）で確認する。
-  - 検証基準7: ADR（`color-anomaly-score-cand1-pilot.md`決定6）の目標（FPRがraw単独と同水準）を満たすか
-    確認する。満たさない場合は`sigma_smooth`/`sigma_floor_pct`/`fpr`を調整し、ADRに実測値を追記する。
-  - 追加欠陥データの収集は行わない（ADR決定6・4項目確認済み）ため、この43枚が唯一の検証基盤である前提を
-    維持する。
-  - Refs: 決定6 ／ commit: なし（検証結果を`color-anomaly-score-cand1-pilot.md`に追記するのみ）
+- [x] **23. （手動検証）既存学習済みモデルへの後付け較正によるFPR/検知率の確認**
+  - 当初計画（実学習してpara.jsonを確認）から変更: advisorの助言により、既存学習済みモデル（.pth重み）に
+    後付けでcand1較正を行い、実際の`EfficientADFullModel.forward()`を通して測定する方式で実施
+    （cand1較正はpara.json側の後付けであり.pth重みは較正結果に依存しないため、再学習不要）。
+  - 検証の過程で edge_mask 規約の不整合バグ（タスク21の追加修正）・単一fprでのFPR悪化（決定8で
+    fpr_raw/fpr_z分離）・データセット側の境界画像ラベル修正（ユーザー実施）が判明・対応された。
+  - 最終検証: color_no=001、ラベル修正後データセット（good=949, defect=71）で
+    FPR raw単独0.91%→unified 1.09%（決定6の目標「raw単独と同水準」を達成）、
+    欠陥検知45/71→45/71（変化なし、悪化なし）。
+  - Refs: 決定6, 8 ／ commit: なし（検証結果を`color-anomaly-score-cand1-pilot.md`に追記のみ）
 
 ---
 
