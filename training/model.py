@@ -77,11 +77,12 @@ class EfficientADFullModel(torch.nn.Module):
         else:
             self.threshold_val = None
 
-        # 候補1 (raw + z-score OR, monochro 専用): cand1=dict(mu,sigma,A,Z,T) or None。
+        # 候補1 (raw + z-score OR): cand1=dict(mu,sigma,A,Z,T) or None。
         # 有効時 forward は統合スコア max(raw/A, z/Z) を出力 (NG if >= T は C#/外部で判定)。
-        # mode!=monochro or cand1=None なら従来 raw 出力 (後方互換)。
+        # cand1=None なら従来 raw 出力 (後方互換)。有効/無効は para.json の cand1_enabled が
+        # 制御するため、mode による絞り込みは行わない（color candidate1 pilot, 決定3）。
         self.cand1_enabled = False
-        if self.mode == "monochro" and cand1 is not None:
+        if cand1 is not None:
             mu = torch.as_tensor(cand1["mu"], dtype=torch.float32)
             sigma = torch.as_tensor(cand1["sigma"], dtype=torch.float32)
             self.register_buffer("cand1_mu", mu.view(1, 1, *mu.shape))

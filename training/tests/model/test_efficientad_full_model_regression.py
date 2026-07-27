@@ -100,3 +100,81 @@ def test_forward_matches_reference_cand1_branch(synthetic_scoring_components):
         expected = _reference_forward(model, image_raw)
 
     assert torch.allclose(actual, expected)
+
+
+def test_cand1_enabled_is_mode_independent(synthetic_scoring_components):
+    """cand1指定時はmodeに関わらずcand1_enabled=True (決定3: color candidate1 pilot)。"""
+    c = synthetic_scoring_components()
+    torch.manual_seed(2)
+    mu = torch.rand(c['map_h'], c['map_w']).numpy() * 0.05
+    sigma = torch.rand(c['map_h'], c['map_w']).numpy() * 0.04 + 0.01
+    cand1 = {'mu': mu, 'sigma': sigma, 'A': 1.0, 'Z': 3.0, 'T': 1.0}
+
+    model_color = _build_model(c, mode='color', cand1=cand1)
+    model_monochro = _build_model(c, mode='monochro', cand1=cand1)
+
+    assert model_color.cand1_enabled is True
+    assert model_monochro.cand1_enabled is True
+
+
+def test_forward_matches_cand1_formula_when_mode_is_color(synthetic_scoring_components):
+    """color modeでもcand1指定時はmax(raw/A,z/Z)分岐が使われる(決定3)。
+
+    _reference_forwardはmodel.cand1_enabledを参照するため、旧ゲート(mode=="monochro"限定)の
+    下ではactual/expectedが共にpad+interpolate分岐に揃ってしまい退行を検出できない。
+    そのため、cand1が渡された場合は無条件にcand1分岐を適用する期待値を別途計算する。
+    """
+    c = synthetic_scoring_components()
+    image_raw = torch.from_numpy(c['image_np'].transpose(2, 0, 1)[None]).float()
+    torch.manual_seed(3)
+    mu = torch.rand(c['map_h'], c['map_w']).numpy() * 0.05
+    sigma = torch.rand(c['map_h'], c['map_w']).numpy() * 0.04 + 0.01
+    cand1 = {'mu': mu, 'sigma': sigma, 'A': 1.0, 'Z': 3.0, 'T': 1.0}
+    model = _build_model(c, mode='color', cand1=cand1)
+
+    with torch.no_grad():
+        actual = model(image_raw)
+        expected = _reference_forward_forcing_cand1_branch(model, image_raw)
+
+    assert torch.allclose(actual, expected)
+
+
+def _reference_forward_forcing_cand1_branch(model, x):
+    """_reference_forwardと同じmap_combined計算だが、cand1分岐を無条件に適用する。"""
+    x = x / 255.0
+    x = (x - model.mean) / model.std
+
+    teacher_output = model.teacher(x)
+    teacher_output = (teacher_output - model.teacher_mean) / model.teacher_std
+    student_output = model.student(x)
+
+    diff_st = (teacher_output - student_output[:, :model.out_channels]) ** 2
+    if model.channel_weights is not None:
+        map_st = torch.sum(diff_st * model.channel_weights, dim=1, keepdim=True)
+    else:
+        map_st = torch.mean(diff_st, dim=1, keepdim=True)
+
+    if model.ae_para > 0:
+        autoencoder_output = model.autoencoder(x)
+        map_ae = torch.mean(
+            (autoencoder_output - student_output[:, model.out_channels:]) ** 2,
+            dim=1, keepdim=True)
+    else:
+        map_ae = torch.zeros_like(map_st)
+
+    if model.q_st_start is not None:
+        map_st = 0.1 * (map_st - model.q_st_start) / (model.q_st_end - model.q_st_start)
+    if model.q_ae_start is not None and model.ae_para > 0:
+        map_ae = 0.1 * (map_ae - model.q_ae_start) / (model.q_ae_end - model.q_ae_start)
+
+    map_combined = model.st_para * map_st + model.ae_para * map_ae
+
+    edge_w = int(model.edge_mask_w)
+    if edge_w > 0:
+        from utils.edge_mask import apply_edge_mask_zero
+        map_combined = apply_edge_mask_zero(map_combined, edge_w)
+
+    raw = torch.max(torch.max(map_combined, dim=3)[0], dim=2)[0]
+    zmap = (map_combined - model.cand1_mu) / (model.cand1_sigma + 1e-6)
+    zval = torch.max(torch.max(zmap, dim=3)[0], dim=2)[0]
+    return torch.maximum(raw / model.cand1_A, zval / model.cand1_Z)

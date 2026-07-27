@@ -296,7 +296,7 @@
     既存呼び出し結果と一致）・2（smooth>1で平滑化が効く）・3（floor指定で下限が効く）。
   - Refs: 決定4 ／ commit: `feat(training-utils): candidate1_calibにsigma平滑化・floorを追加`
 
-- [ ] **20. `training/model.py`: cand1ゲートのモード非依存化**
+- [x] **20. `training/model.py`: cand1ゲートのモード非依存化**
   - `EfficientADFullModel.__init__`の`if self.mode == "monochro" and cand1 is not None:`を
     `if cand1 is not None:`に変更。有効/無効は`para.json`の`cand1_enabled`で既に制御されているため、
     mode条件は不要な制約と判断（決定3）。
