@@ -11,14 +11,33 @@
 from __future__ import annotations
 
 import numpy as np
+from scipy.ndimage import uniform_filter
 
 EPS = 1e-6
 
 
-def compute_mu_sigma(maps):
-    """良品 ST マップ列 (各 2D, N 枚) → per-pixel (μ, σ)。"""
+def compute_mu_sigma(
+    maps, sigma_smooth: int = 1, sigma_floor_pct: float | None = None
+):
+    """良品 ST マップ列 (各 2D, N 枚) → per-pixel (μ, σ)。
+
+    Args:
+        maps: 良品 ST マップ列 (各 2D, N 枚)。
+        sigma_smooth: σマップの空間平滑化窓 (uniform_filter)。1以下は無効 (no-op)。
+            較正枚数が少ない場合の per-pixel σ推定ノイズを抑える (color candidate1 pilot)。
+        sigma_floor_pct: σの下限をパーセンタイルで設定。None は無効 (no-op)。
+
+    Returns:
+        (mu, sigma) の tuple。muは平滑化・floorの対象外 (半々分割での再現性が
+        muは高く、平滑化が不要と実測で確認済み)。
+    """
     arr = np.stack([np.asarray(m, dtype=np.float64) for m in maps], axis=0)
-    return arr.mean(axis=0), arr.std(axis=0)
+    mu, sigma = arr.mean(axis=0), arr.std(axis=0)
+    if sigma_smooth is not None and sigma_smooth > 1:
+        sigma = uniform_filter(sigma, size=sigma_smooth)
+    if sigma_floor_pct is not None:
+        sigma = np.maximum(sigma, np.percentile(sigma, sigma_floor_pct))
+    return mu, sigma
 
 
 def raw_map_max(m) -> float:

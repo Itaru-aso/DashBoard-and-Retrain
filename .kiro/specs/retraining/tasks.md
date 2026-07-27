@@ -277,6 +277,67 @@
 
 ---
 
+## 追加タスク: color 異常スコア算出方式への candidate1 導入パイロット
+
+> 出典: `.kiro/specs/retraining/color-anomaly-score-cand1-pilot.md` v1.0（決定事項1〜7）。
+> CLAUDE.md例外（決定7相当）はユーザー承認済み。対象: `training/utils/candidate1_calib.py`・
+> `training/model.py`（cand1ゲートのモード非依存化）・`training/train/color.py`（cand1較正ブロックの追加）・
+> `training/conf/config.yaml`（`candidate1`設定追加）のみ。`training/train/monochro.py`は一切変更しない。
+> 損失関数・モデル構造・学習ループ・color側のその他学習ロジックは対象外・変更不可。
+> 依存順: 19 → 20 → 21 → 22（config追加は21と並行可）、23はcolor_no=001の実学習が前提のため手動実施。
+
+- [x] **19. `training/utils/candidate1_calib.py`: `compute_mu_sigma`にsigma平滑化・floorを追加**
+  - `compute_mu_sigma(maps, sigma_smooth=1, sigma_floor_pct=None)`にキーワード引数を追加（後方互換：
+    デフォルト値では既存の`monochro.py`呼び出しと完全に同じ結果になること）。
+  - `sigma_smooth`: `scipy.ndimage.uniform_filter`でσマップを空間平滑化（窓サイズ、1は無効=no-op）。
+  - `sigma_floor_pct`: σの下限をパーセンタイルで設定（`np.maximum(sigma, np.percentile(sigma, pct))`、
+    Noneは無効=no-op）。
+  - テスト（新規`training/tests/test_candidate1_calib.py`、純粋関数・モデル不要）: 検証基準1（デフォルト値で
+    既存呼び出し結果と一致）・2（smooth>1で平滑化が効く）・3（floor指定で下限が効く）。
+  - Refs: 決定4 ／ commit: `feat(training-utils): candidate1_calibにsigma平滑化・floorを追加`
+
+- [ ] **20. `training/model.py`: cand1ゲートのモード非依存化**
+  - `EfficientADFullModel.__init__`の`if self.mode == "monochro" and cand1 is not None:`を
+    `if cand1 is not None:`に変更。有効/無効は`para.json`の`cand1_enabled`で既に制御されているため、
+    mode条件は不要な制約と判断（決定3）。
+  - テスト（`training/tests/model/test_efficientad_full_model_regression.py`）: 検証基準4
+    （`mode='color'` + cand1指定時にcand1分岐（`max(raw/A,z/Z)`）が使われることを確認する新規ケース。
+    TDD RED→GREEN）。既存の`test_scoring_transform.py`・`test_model_export_onnx_parity.py`は
+    `compute_anomaly_score`自体がmode非依存のため変更不要（既存green維持を確認）。
+  - Refs: 決定3 ／ commit: `fix(training-model): cand1ゲートをモード非依存化`
+
+- [ ] **21. `training/train/color.py`: cand1較正ブロックの追加（config opt-in）**
+  - `train_color()`末尾の閾値計算後に、`cfg.get('candidate1', {}).get('enabled', False)`が`true`の場合のみ
+    cand1較正を実行し`para.json`に`cand1_enabled`/`cand1_mu`/`cand1_sigma`/`cand1_A`/`cand1_Z`/`cand1_T`を
+    保存する（`monochro.py`のL706-733相当のロジックをcolor用に実装。`monochro.py`自体は変更しない）。
+  - 較正ロジックはテスト容易性のため`_calibrate_cand1(cand1_maps, sigma_smooth, sigma_floor_pct, fpr)`として
+    `color.py`内に関数化する（既存の学習ループ・閾値計算部分は無改変。後付けの較正ステップのみ関数化）。
+  - `enabled=False`（デフォルト）の場合は`para.json`にcand1キーを一切追加しない
+    （既存の全color_noの挙動に影響なし）。
+  - テスト（新規、`_calibrate_cand1`を合成データ=小さいダミーmap配列で単体テスト）: 検証基準5
+    （`enabled=False`相当の非呼び出し時は既存挙動と同一）・6（`_calibrate_cand1`が期待するmu/sigma/A/Zを
+    返す）。`train_color()`全体を実行する統合テストは行わない（既存方針を維持、学習ループ自体は高コストで
+    未テスト対象のまま）。
+  - Refs: 決定2, 5 ／ commit: `feat(training-color): cand1較正ブロックの追加（config opt-in）`
+
+- [ ] **22. `training/conf/config.yaml`: `candidate1`設定の追加**
+  - `candidate1: {enabled: false, fpr: 0.5, sigma_smooth: 7, sigma_floor_pct: 50}`をデフォルト追加
+    （`enabled: false`のため他color_noへの影響なし）。color_no=001のパイロット学習時のみ
+    CLIオーバーライド（`candidate1.enabled=true`）で有効化する。
+  - テスト: 既存configロード系テストのgreen維持を確認（新規テストは不要、設定値追加のみ）。
+  - Refs: 決定2, 5 ／ commit: `chore(training-conf): candidate1設定のデフォルト追加`
+
+- [ ] **23. （手動検証）color_no=001の実学習によるFPR/検知率の確認**
+  - `candidate1.enabled=true`で color_no=001 を実学習し、生成された`para.json`のFPR/検知率を既存欠陥
+    テストセット（`4_dataset/001/color/test/defect`、43枚）で確認する。
+  - 検証基準7: ADR（`color-anomaly-score-cand1-pilot.md`決定6）の目標（FPRがraw単独と同水準）を満たすか
+    確認する。満たさない場合は`sigma_smooth`/`sigma_floor_pct`/`fpr`を調整し、ADRに実測値を追記する。
+  - 追加欠陥データの収集は行わない（ADR決定6・4項目確認済み）ため、この43枚が唯一の検証基盤である前提を
+    維持する。
+  - Refs: 決定6 ／ commit: なし（検証結果を`color-anomaly-score-cand1-pilot.md`に追記するのみ）
+
+---
+
 ## トレーサビリティ (Requirements ↔ Tasks)
 
 - M-R1（起票・手動・存在チェック）→ 3, 8, 11 ／ M-R2（キュー・同時1）→ 5
@@ -294,3 +355,8 @@
 - 決定4・5・13（per-mode解決・dataset_id解決・env）→ 14 ／ 決定6・14・24（CLI override配線・size/chain/tape）→ 15
 - 決定15〜20（マージンあり画像・monochro DataLoader）→ 16 ／ 決定21・22（ONNXパスのタプル管理）→ 17
 - 決定23（配信ファイル名タプル化・保留）→ 18
+
+### color 異常スコア算出方式 candidate1 パイロット（ADR決定 ↔ Tasks）
+
+- 決定4（sigma平滑化・floorの拡張）→ 19 ／ 決定3（cand1ゲートのモード非依存化）→ 20
+- 決定2・5（config opt-in・color_no=001の初期デフォルト値）→ 21, 22 ／ 決定6（本番投入前検証）→ 23
