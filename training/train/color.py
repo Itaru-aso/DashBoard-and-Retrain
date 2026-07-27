@@ -99,7 +99,7 @@ def _resolve_teacher_weights_path(cfg) -> str:
 
 
 def _calibrate_cand1(
-    cand1_maps, sigma_smooth=1, sigma_floor_pct=None, fpr=0.5
+    cand1_maps, sigma_smooth=1, sigma_floor_pct=None, fpr_raw=0.5, fpr_z=0.05
 ):
     """良品スコアマップ列から candidate1 (z-score OR) 較正値を計算する。
 
@@ -107,11 +107,17 @@ def _calibrate_cand1(
     `training/train/monochro.py` の較正ロジック（L706-733相当）と同じ数式
     （`utils/candidate1_calib.py`）を用いるが、`monochro.py` 自体は変更しない。
 
+    A(raw較正)とZ(z較正)は独立したfprで較正する。raw/zで同一fprを使うと
+    Zが緩くなりすぎ、検知率の上乗せなしにFPRだけ悪化することが実データ検証
+    (color-anomaly-score-cand1-pilot.md 決定8)で判明したため、Z側はより厳しい
+    デフォルト値(fpr_z=0.05)とする。
+
     Args:
         cand1_maps: 良品検証画像1枚ごとの scored_map（edge_mask適用後の2D numpy配列）のリスト。
         sigma_smooth: σマップの空間平滑化窓。1以下は無効。
         sigma_floor_pct: σの下限パーセンタイル。Noneは無効。
-        fpr: raw/z 双方の較正に用いる目標False Positive Rate（%）。
+        fpr_raw: raw(A)較正に用いる目標False Positive Rate（%）。
+        fpr_z: z(Z)較正に用いる目標False Positive Rate（%）。
 
     Returns:
         para.json に追加する cand1_* キーの dict。
@@ -121,7 +127,8 @@ def _calibrate_cand1(
     )
     raws = [raw_map_max(m) for m in cand1_maps]
     zs = [zscore_map_max(m, mu, sigma) for m in cand1_maps]
-    A, Z = calib_AZ(raws, zs, fpr_pct=fpr)
+    A, _ = calib_AZ(raws, zs, fpr_pct=fpr_raw)
+    _, Z = calib_AZ(raws, zs, fpr_pct=fpr_z)
     return {
         'cand1_enabled': True,
         'cand1_mu': mu.tolist(),
@@ -129,7 +136,8 @@ def _calibrate_cand1(
         'cand1_A': float(A),
         'cand1_Z': float(Z),
         'cand1_T': 1.0,
-        'cand1_fpr': float(fpr),
+        'cand1_fpr_raw': float(fpr_raw),
+        'cand1_fpr_z': float(fpr_z),
         'cand1_sigma_smooth': int(sigma_smooth),
         'cand1_sigma_floor_pct': sigma_floor_pct,
     }
@@ -557,11 +565,14 @@ def train_color(cfg: DictConfig, mgr=None):
                 cand1_maps,
                 sigma_smooth=int(candidate1_cfg.get('sigma_smooth', 1)),
                 sigma_floor_pct=candidate1_cfg.get('sigma_floor_pct', None),
-                fpr=float(candidate1_cfg.get('fpr', 0.5)),
+                fpr_raw=float(candidate1_cfg.get('fpr_raw', 0.5)),
+                fpr_z=float(candidate1_cfg.get('fpr_z', 0.05)),
             )
             para_json.update(cand1_result)
             print(f'候補1較正(color): A={cand1_result["cand1_A"]:.4f} '
-                  f'Z={cand1_result["cand1_Z"]:.3f} (fpr={cand1_result["cand1_fpr"]}%)')
+                  f'Z={cand1_result["cand1_Z"]:.3f} '
+                  f'(fpr_raw={cand1_result["cand1_fpr_raw"]}%, '
+                  f'fpr_z={cand1_result["cand1_fpr_z"]}%)')
         except Exception as e:
             print(f'⚠️ 候補1較正に失敗 (raw のみで継続): {e}')
 

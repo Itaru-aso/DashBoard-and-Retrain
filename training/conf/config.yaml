@@ -202,7 +202,8 @@ color:
   # .kiro/specs/retraining/color-anomaly-score-cand1-pilot.md 決定2, 5
   candidate1:
     enabled: false
-    fpr: 0.5
+    fpr_raw: 0.5
+    fpr_z: 0.05
     sigma_smooth: 7
     sigma_floor_pct: 50
   cutoff: 0.33

@@ -21,25 +21,32 @@ def test_calibrate_cand1_returns_expected_keys():
     maps = _make_maps(rng)
 
     result = _calibrate_cand1(
-        maps, sigma_smooth=1, sigma_floor_pct=None, fpr=0.5
+        maps, sigma_smooth=1, sigma_floor_pct=None, fpr_raw=0.5, fpr_z=0.05
     )
 
     assert result['cand1_enabled'] is True
     assert set(result.keys()) >= {
         'cand1_enabled', 'cand1_mu', 'cand1_sigma', 'cand1_A', 'cand1_Z',
-        'cand1_T', 'cand1_fpr', 'cand1_sigma_smooth', 'cand1_sigma_floor_pct',
+        'cand1_T', 'cand1_fpr_raw', 'cand1_fpr_z',
+        'cand1_sigma_smooth', 'cand1_sigma_floor_pct',
     }
     assert result['cand1_T'] == 1.0
-    assert result['cand1_fpr'] == 0.5
+    assert result['cand1_fpr_raw'] == 0.5
+    assert result['cand1_fpr_z'] == 0.05
     assert result['cand1_sigma_smooth'] == 1
     assert result['cand1_sigma_floor_pct'] is None
 
 
 def test_calibrate_cand1_matches_manual_computation():
-    """utils.candidate1_calibの各関数を素朴に呼んだ結果と一致することを確認する。"""
+    """utils.candidate1_calibの各関数を素朴に呼んだ結果と一致することを確認する。
+
+    A(raw較正)とZ(z較正)は別々のfprで較正されるため、calib_AZを2回
+    (fpr_raw用・fpr_z用)呼んだ結果と一致するはず。
+    """
     rng = np.random.default_rng(1)
     maps = _make_maps(rng)
-    sigma_smooth, sigma_floor_pct, fpr = 3, 25, 0.5
+    sigma_smooth, sigma_floor_pct = 3, 25
+    fpr_raw, fpr_z = 0.5, 0.05
 
     expected_mu, expected_sigma = compute_mu_sigma(
         maps, sigma_smooth=sigma_smooth, sigma_floor_pct=sigma_floor_pct)
@@ -47,17 +54,30 @@ def test_calibrate_cand1_matches_manual_computation():
     expected_zs = [
         zscore_map_max(m, expected_mu, expected_sigma) for m in maps
     ]
-    expected_A, expected_Z = calib_AZ(expected_raws, expected_zs, fpr_pct=fpr)
+    expected_A, _ = calib_AZ(expected_raws, expected_zs, fpr_pct=fpr_raw)
+    _, expected_Z = calib_AZ(expected_raws, expected_zs, fpr_pct=fpr_z)
 
     result = _calibrate_cand1(
-        maps, sigma_smooth=sigma_smooth,
-        sigma_floor_pct=sigma_floor_pct, fpr=fpr,
+        maps, sigma_smooth=sigma_smooth, sigma_floor_pct=sigma_floor_pct,
+        fpr_raw=fpr_raw, fpr_z=fpr_z,
     )
 
     np.testing.assert_allclose(np.array(result['cand1_mu']), expected_mu)
     np.testing.assert_allclose(np.array(result['cand1_sigma']), expected_sigma)
     assert result['cand1_A'] == expected_A
     assert result['cand1_Z'] == expected_Z
+
+
+def test_calibrate_cand1_fpr_z_stricter_than_fpr_raw_gives_higher_z():
+    """fpr_zをfpr_rawより厳しくすると、Zはより高く(=z分岐が発火しづらく)なる。"""
+    rng = np.random.default_rng(3)
+    maps = _make_maps(rng, n=200)
+
+    loose = _calibrate_cand1(maps, fpr_raw=0.5, fpr_z=0.5)
+    strict = _calibrate_cand1(maps, fpr_raw=0.5, fpr_z=0.05)
+
+    assert strict['cand1_Z'] > loose['cand1_Z']
+    assert strict['cand1_A'] == loose['cand1_A']
 
 
 def test_calibrate_cand1_mu_sigma_shape_matches_input_map_shape():

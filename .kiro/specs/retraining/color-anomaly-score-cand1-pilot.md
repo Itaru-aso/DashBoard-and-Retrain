@@ -1,0 +1,182 @@
+# color 異常スコア算出方式への candidate1（z-score OR）導入パイロット v1.1
+
+> 位置づけ: `retraining` spec の `design.md` を上書きせず、color の異常スコア算出方式に関する意思決定記録（ADR相当）として独立管理する。
+> `.kiro/specs/retraining/dataset-export-root-migration.md`（学習データ参照方式の例外化）と同じ位置づけの、
+> CLAUDE.md「やってはいけないこと」に対する追加の明示的例外。
+
+## 目的 / 背景
+
+現状、`training/` の異常スコア算出方式は monochro と color で異なる。
+
+- **monochro**: `train/monochro.py` が検証用良品マップから画素位置ごとの `μ, σ` を較正し、
+  `raw`（マップ最大値）と `z = max((map-μ)/σ)` をそれぞれ良品分布の分位点で `A, Z` に較正、
+  推論時は統合スコア `max(raw/A, z/Z)`（OR判定）を `model.py` / `utils/scoring_transform.py` が出力する
+  （`cand1` と呼称。`utils/candidate1_calib.py` が較正関数を提供）。
+- **color**: `train/color.py` は `raw`（マップ最大値）のみ。z-score較正コード自体が存在しない。
+  `model.py` の cand1 分岐は `if self.mode == "monochro" and cand1 is not None:` で monochro 専用にゲートされている。
+
+ユーザーから、color で検出したい不良（小さい黒点異物・薄い汚れ）が低コントラストで raw 方式に構造的に弱いこと、
+monochro 同様の z-score OR 方式を color に合わせるべきかの相談があった。オフライン検証（読み取り専用、
+`training/` 配下のコードは変更せず、既存の学習済みモデル・検証データのみを使用）で以下を確認した。
+
+### オフライン検証で確認した事実（color_no=001）
+
+- **mu/sigma の再現性**: 較正用良品画像を2分割し独立集団間で比較。mu（背景平均パターン）は相関0.97で
+  安定・再現（ヒートマップ上も縦方向の帯状構造が半々で一致）。sigma（背景ばらつき）は相関0.84で
+  mu より不安定（n=200程度だと局所的なホットスポットが分割間で異なる位置に出る＝推定ノイズ）。
+- **sigmaのレンジ**: min 0.012〜max 0.082（比6.85倍）。monochro実運用モデル（比5.4倍）と同程度の
+  位置依存ノイズ不均一性が color にも存在する（z補正の理論的根拠が成立する）。
+- **素朴な移植のFPR悪化**: 目標fpr=0.5%較正で、raw単独のホールドアウトFPRは分割条件により0.35〜2.60%、
+  `max(raw/A,z/Z)` にすると分割条件により7.81〜8.16%まで悪化（raw単独の3〜16倍）。
+  原因は88×116≒1万画素の map に対し max を取るため、位置ごとのσ推定ノイズが一部画素で極端に小さくなると
+  そこがボトルネックになり誤検知に直結する（最大値統計の裾の重さ）。
+- **欠陥43枚（実際の見逃し候補を含む）での検知率**: raw単独7〜19/43（分割条件次第）に対し、
+  `max(raw/A,z/Z)` は11〜34/43（同条件比で概ね2倍前後）。z分岐がraw単独では埋もれる低コントラスト異常を
+  実際に拾えていることを実データで確認。
+- **FPR抑制に効くレバー**: σ空間平滑化（smooth窓3〜9）と較正枚数の増加（400→800）が明確に効く
+  （FPRを1/3〜1/5に抑制）。σ floor（パーセンタイル下限）は効果が弱い。z側単独のfpr再較正
+  （0.5%→0.02%まで100倍変えてもFPRがほぼ動かない）はほぼ無効。
+  組み合わせ例 `smooth=7, sigma_floor_pct=50, fpr_z=0.05%` で、FPRをraw単独と同水準（0.35%）まで
+  抑制しつつ欠陥検知15/43（raw単独7/43の2倍超）を達成する分割条件を確認。
+- **限界**: 欠陥サンプルが43枚（color_no=001のみ）と少なく、較正/ホールドアウトの分割やシード次第で
+  検知率・FPRの実測値にブレがある（同一条件でraw検知7〜13/43、unified検知11〜15/43の範囲でブレる）。
+
+## 決定事項
+
+1. **スコープ境界**: color_no='001' のみパイロット導入。他の color_no は現状の raw 方式を維持する。
+   色によってテープ・チェーンの印字パターンや境界の位置が異なり、001で有効なパラメータが
+   他色でも同様に効くかは未検証のため。
+2. **実装方式**: `train/color.py` に config opt-in フラグ（例: `candidate1.enabled`、デフォルト `false`）を追加し、
+   有効時のみ `train/monochro.py` の cand1 較正ブロック（L706-733相当）と同様の較正を行い、
+   `para.json` に `cand1_enabled`/`cand1_mu`/`cand1_sigma`/`cand1_A`/`cand1_Z`/`cand1_T` を保存する。
+   `cand1_enabled=false`（デフォルト）の他 color_no は既存の `para.json`（cand1キー無し）のまま、
+   後方互換が保たれる（`model.py` の `load_para` は既に `para.get('cand1_enabled', False)` でゲート済み）。
+3. **`model.py` のモードゲート緩和**: `if self.mode == "monochro" and cand1 is not None:` を
+   `if cand1 is not None:` に変更する。有効/無効は既に `para.json` の `cand1_enabled` で制御されており、
+   mode による二重ゲートは不要な制約であるため。
+4. **`utils/candidate1_calib.py` の拡張**: `compute_mu_sigma` に `sigma_smooth`（空間平滑化窓、デフォルト無効）・
+   `sigma_floor_pct`（パーセンタイルfloor、デフォルト無効）をオプション引数として追加する。
+   デフォルト無効＝monochro の既存呼び出しへの影響なし（後方互換）。
+5. **color_no='001' の初期デフォルト値**: `sigma_smooth=7, sigma_floor_pct=50, fpr_raw=0.5%, fpr_z=0.05%`
+   （A・Zは独立したfprで較正する。理由は決定8参照）。
+   上記オフライン検証で「FPRをraw単独と同水準に抑えつつ欠陥検知を概ね2倍にする」組み合わせとして
+   確認した値だが、**固定値ではなく初期値**として扱う。実際の学習時には production の validation split
+   （`train/good` の20%、color_no='001' は約455枚）で mu/sigma/A/Z を再較正する。
+   オフライン検証で使用した `test/good`（976枚）とは異なる画像集合であるため、
+   学習時に実測されるFPR/検知率はオフライン検証の数値と一致しない前提で運用する。
+6. **本番投入前検証**: 学習後に生成される `para.json` のFPR/検知率を、既存欠陥テストセット（43枚）で
+   再確認する。追加欠陥データの収集は当面行わない（ユーザー確認済み）。43枚が唯一の検証基盤であるという
+   前提上のリスクを受容し、運用開始後に新たな欠陥事例が集まった場合を再較正のトリガーとする。
+7. **ロールバック経路**: config opt-in フラグを `false` に戻して再学習するか、あるいは配信済み ONNX の
+   `para.json` 相当メタデータの `cand1_enabled` を無視する（`model.py` のゲートで対応）ことで、
+   即座に raw 方式へフォールバックできる。
+8. **A/Zの独立fpr較正（2026-07-27追記）**: `_calibrate_cand1` は当初 raw(A)・z(Z) を単一の `fpr` で
+   較正していたが、実際の `model.forward()` を通した検証で「FPRだけ大きく悪化し検知率の上乗せが無い」
+   という結果になった（詳細は「実装後の追加知見」節）。原因は Z が緩すぎたことと判明したため、
+   `fpr_raw`（A用、既定0.5%）・`fpr_z`（Z用、既定0.05%）を分離した。`utils/candidate1_calib.py` の
+   既存関数は変更不要（`calib_AZ` を2回、異なる `fpr_pct` で呼ぶだけ）。
+
+## 採用理由
+
+- オフライン検証（実欠陥データ43枚、color_no=001）で、raw単独の検知率（7〜19/43、分割条件次第）に対し
+  z分岐追加で2倍前後（11〜34/43）に改善することを確認済み。ユーザーが指定した検出対象
+  （小さい黒点異物・薄い汚れ）は低コントラストで raw 方式に構造的に弱いタイプであり、
+  この結果は理論的な予想と整合する。
+- FPR悪化はσ平滑化+floor+較正枚数で raw単独と同水準まで抑制可能なことを確認済み
+  （ユーザー許容度「raw同水準まで」と合致）。
+
+## 検討した代替案と不採用理由
+
+1. **現状維持（raw方式のまま）**: 検知率不足（見逃し）を許容することになり、ユーザーが明示した課題
+   （小さい黒点異物・薄い汚れの検出強化）を解決しない。不採用。
+2. **全 color_no へ無条件展開**: 色ごとの背景ムラ構造の違いが未検証であり、001で有効なパラメータが
+   他色でFPRを悪化させるリスクを排除できない。ユーザーが「001でパイロット」を選択したため不採用。
+3. **z側だけ独立にfpr再較正して抑制**: オフライン検証で fpr を0.5%→0.02%まで100倍変えても
+   FPRがほぼ動かないことを確認済み（裾が重いため単独では無効）。不採用
+   （ただし smooth/floor との併用パラメータの一構成要素としては残す）。
+4. **欠陥データを拡充してから最終判断**: ユーザー確認により拡充不可のため不採用。
+   43枚での判断リスクを本ドキュメントに明記し受容する。
+
+## Consequence（残るリスク）
+
+- 43枚という小さいサンプルに基づく較正のため、実運用開始後にFPRが想定を超える可能性がある。
+  config opt-in フラグ off による raw 方式への即時フォールバック経路を用意する。
+- 較正枚数は color_no ごとの validation split 枚数に依存する（001は2277枚と十分だが、
+  将来パイロット拡大時は他色の枚数を要確認）。
+
+## 実装計画（`.kiro/specs/retraining/tasks.md` タスク19〜23に対応）
+
+TDD（RED→GREEN→REFACTOR）で4ステップに分解し、既存の学習ループ本体（`train/monochro.py`・
+`train/color.py`の既存学習部分）には触れず、末尾の較正処理のみを追加する。
+
+1. **`training/utils/candidate1_calib.py`（拡張・後方互換）**: `compute_mu_sigma(maps, sigma_smooth=1,
+   sigma_floor_pct=None)` に平滑化（`scipy.ndimage.uniform_filter`）・floor（パーセンタイル下限）の
+   オプション引数を追加。デフォルト値では既存の `monochro.py` 呼び出しと完全に同じ結果になること（後方互換）
+   を回帯テストで確認する。新規 `training/tests/test_candidate1_calib.py`（純粋関数・モデル不要で高速）。
+2. **`training/model.py`（1行変更）**: `if self.mode == "monochro" and cand1 is not None:` →
+   `if cand1 is not None:`。有効/無効は `para.json` の `cand1_enabled` で既に制御されているため、mode条件は
+   不要な制約（決定3）。`test_efficientad_full_model_regression.py` に `mode='color'` + cand1指定の新規ケースを
+   追加（TDD RED→GREEN）。`compute_anomaly_score` 自体はmode非依存のため `test_scoring_transform.py` 等は
+   変更不要（既存green維持を確認するのみ）。
+3. **`training/train/color.py`（新規ブロック追加、既存学習ループは無改変）**: `train_color()` 末尾の
+   閾値計算後、config opt-in（`cfg.candidate1.enabled`、デフォルト`false`）時のみ較正処理を実行。較正ロジックは
+   `_calibrate_cand1(cand1_maps, sigma_smooth, sigma_floor_pct, fpr)` として関数化し、合成データ（小さいダミー
+   map配列）で単体テストする（`train_color()` 全体を回す統合テストはしない）。`monochro.py` は一切変更しない。
+4. **`training/conf/config.yaml`（設定追加）**: `candidate1: {enabled: false, fpr: 0.5, sigma_smooth: 7,
+   sigma_floor_pct: 50}` をデフォルト追加（`enabled: false` のため他色は無変更のまま安全）。
+   color_no=001 のパイロット学習時のみ CLI オーバーライド（`candidate1.enabled=true`）で有効化する。
+5. **（手動検証）**: color_no=001 を `candidate1.enabled=true` で実学習し、生成された `para.json` の
+   FPR/検知率を欠陥テストセット（43枚）で確認する。決定6の目標（FPRがraw単独と同水準）を満たすか確認し、
+   満たさない場合は `sigma_smooth`/`sigma_floor_pct`/`fpr` を調整の上、本ドキュメントに実測値を追記する。
+
+### 検証ゲート
+- 既存 `pytest training/tests/` が全て green のまま（既存 monochro/color 回帯を壊さないこと）。
+- 新規テスト（1〜3）が green。
+- ステップ5の実測値が本ADRの目標（FPRがraw単独と同水準）を満たすか確認。
+
+## 実装後の追加知見（2026-07-27）
+
+実装（タスク19〜22）完了後、タスク23（手動検証）に着手する過程で advisor レビューと実データ検証により
+以下が判明し、上記の決定事項・実装計画を更新した。
+
+### edge_mask 規約の不整合（バグ、修正済み）
+
+`train/color.py` の cand1_maps 収集が `slice_edge_excluded`（幅縮小）を使っていたが、
+`utils/scoring_transform.py` の cand1 分岐は推論時に `apply_edge_mask_zero`（フル幅・両端0埋め）を
+適用してから mu/sigma と減算するため、`edge_mask_w>0`（color本番=2）では mu/sigma と map_combined の
+形状が不一致になり `model.forward()` が失敗する不整合があった。monochro は `edge_mask_w=0` のため
+両者が no-op で一致し、これまで顕在化していなかった。`apply_edge_mask_zero` に統一する修正と、
+edge_mask_w>0 での実forward回帯テストを追加した。
+
+### 単一fprでのFPR悪化と原因診断
+
+修正後、既存学習済みモデル＋新規較正（当時: 単一 `fpr=0.5%`, `sigma_smooth=7`, `sigma_floor_pct=50`）を
+実際の `model.forward()` で検証したところ、FPR 2.95%（目標0.5%相当）・欠陥検知19/43（raw単独と同値、
+上乗せ無し）という結果になった。オフライン切り分け実験（キャッシュ済みマップでの数値実験）により、
+原因は2つと判明:
+1. **A/Z単一fprの設計ミス**（実在・再現性あり）: Zをraw用と同じ緩いfprで較正すると発火しやすくなり
+   FPRだけ悪化する。fpr_zを厳しく分離すると改善する（決定8で修正）。
+2. **較正サンプル(400枚)自体の分散が大きい**（データ由来）: `test/good`(976枚)のraw_maxを全数確認した
+   ところ、中央値0.25に対し上位5〜10枚が1.5〜2.9という明確な外れ値だった。目視確認した上位3枚には
+   いずれも小さい黒点状の斑点が実際に写っており、**検出したい不良に近い境界的な良品画像**だった。
+   A/Zはp99.5等の極端分位点を400枚程度の小標本から推定するため、この少数の外れ値画像が較正用/
+   ホールドアウトのどちらに入るかで結果が大きく変動する。zero規約とslice規約の差自体は小さく
+   （誤差レベル）、主因ではなかった。
+
+### データセット側の対応（ユーザー実施）
+
+上記の境界画像について `train/good`（2277枚）側も同様に確認したところ、同じパターン（上位7枚程度が
+明確な外れ値、目視で黒点を確認）が見られた。ユーザーが目視確認の上、`export_root` 側の該当画像を
+good カテゴリから defect(ng) カテゴリへ物理移動（正解ラベル修正）し、`3_pool`/`4_dataset` を
+`process_annotated_images()` + `split_pool_to_dataset()` で再構築した（color: good 3253→3164枚
+（-89枚）、defect 228枚に増加。13枚は目視確認済み、追加分はユーザーが提示リストから判断）。
+これは学習アルゴリズム本体ではなくデータ（正解ラベル）の修正であり、CLAUDE.mdの学習ロジック不可侵
+方針の対象外。
+
+### 影響
+
+- タスク23（手動検証）は、上記のコード修正（edge_mask統一・fpr分離）と更新後のデータセットの両方を
+  反映した上で再実行する。
+- 較正サンプルの分散問題は今回の枚数（400程度）では解消しきれない可能性があり、決定6の「43枚のみで
+  判断」というリスク受容は維持しつつ、**A/Zの実測値は学習ごとにブレる前提**であることを明記する
+  （固定値として期待しない）。
