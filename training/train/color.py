@@ -25,7 +25,7 @@ from train.common import (numpy_encoder, focal_feature_loss, GaussianNoise,
 from sklearn.metrics import roc_auc_score, average_precision_score, f1_score, precision_recall_fscore_support, precision_recall_curve
 from omegaconf import DictConfig
 from utils.channel_weights import compute_channel_weights
-from utils.edge_mask import slice_edge_excluded
+from utils.edge_mask import slice_edge_excluded, apply_edge_mask_zero
 from utils.candidate1_calib import (
     compute_mu_sigma, raw_map_max, zscore_map_max, calib_AZ)
 import glob
@@ -530,13 +530,20 @@ def train_color(cfg: DictConfig, mgr=None):
             map_st = torch.mean(diff_st, dim=1, keepdim=True)
         if q_st_start is not None:
             map_st = 0.1 * (map_st - q_st_start) / (q_st_end - q_st_start)
-        scored_map = best_st * map_st
-        scored_map = slice_edge_excluded(scored_map, edge_mask_w)
+        unsliced_scored_map = best_st * map_st
+        scored_map = slice_edge_excluded(unsliced_scored_map, edge_mask_w)
         score = scored_map.max().item()
         scores_val.append(score)
         if cand1_enabled_opt_in:
-            for b in range(scored_map.shape[0]):
-                cand1_maps.append(scored_map[b, 0].detach().cpu().numpy())
+            # cand1較正は推論時(scoring_transform.pyのcand1分岐)と同じ edge_mask 規約
+            # (apply_edge_mask_zero=フル幅・両端0埋め)で計算する必要がある。
+            # slice_edge_excluded(幅を縮小)で較正すると、edge_mask_w>0のとき
+            # 推論時の mu/sigma とのブロードキャスト形状が不一致になる
+            # (monochroはedge_mask_w=0のため両者がno-opで一致し、この不整合が
+            # これまで顕在化していなかった)。
+            cand1_map = apply_edge_mask_zero(unsliced_scored_map, edge_mask_w)
+            for b in range(cand1_map.shape[0]):
+                cand1_maps.append(cand1_map[b, 0].detach().cpu().numpy())
 
     # 正常画像のスコア分布から閾値設定（99.5パーセンタイル）
     scores_np = np.array(scores_val)

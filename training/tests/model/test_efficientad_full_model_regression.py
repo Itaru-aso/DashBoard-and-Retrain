@@ -5,6 +5,7 @@ _reference_forward は Seam3抽出直前の model.py forward() 本体を
 
 実行: cd training && python -m pytest tests/model/test_efficientad_full_model_regression.py -v
 """
+import pytest
 import torch
 
 from model import EfficientADFullModel
@@ -56,14 +57,14 @@ def _reference_forward(model, x):
     return torch.max(torch.max(map_combined, dim=3)[0], dim=2)[0]
 
 
-def _build_model(c, mode='color', cand1=None):
+def _build_model(c, mode='color', cand1=None, edge_mask_w=0):
     return EfficientADFullModel(
         mode, c['height'], c['width'], c['teacher'], c['student'], c['autoencoder'],
         c['teacher_mean'].view(-1), c['teacher_std'].view(-1),
         st_para=1.0, ae_para=0.0 if cand1 is not None else 0.7,
         q_st_start=c['q_st_start'], q_st_end=c['q_st_end'],
         q_ae_start=c['q_ae_start'], q_ae_end=c['q_ae_end'],
-        channel_weights=None, threshold=None, edge_mask_w=0, cand1=cand1,
+        channel_weights=None, threshold=None, edge_mask_w=edge_mask_w, cand1=cand1,
     ).eval()
 
 
@@ -131,6 +132,53 @@ def test_forward_matches_cand1_formula_when_mode_is_color(synthetic_scoring_comp
     sigma = torch.rand(c['map_h'], c['map_w']).numpy() * 0.04 + 0.01
     cand1 = {'mu': mu, 'sigma': sigma, 'A': 1.0, 'Z': 3.0, 'T': 1.0}
     model = _build_model(c, mode='color', cand1=cand1)
+
+    with torch.no_grad():
+        actual = model(image_raw)
+        expected = _reference_forward_forcing_cand1_branch(model, image_raw)
+
+    assert torch.allclose(actual, expected)
+
+
+def test_forward_with_edge_mask_and_cand1_raises_on_sliced_mu_sigma_shape(
+    synthetic_scoring_components,
+):
+    """edge_mask_w>0のとき、mu/sigmaがsliceされた(縮小)幅だとforwardでブロードキャスト
+    エラーになることを明示する回帯テスト(color candidate1 pilotで発覚した不整合)。
+
+    scoring_transform.compute_anomaly_scoreのcand1分岐はapply_edge_mask_zero
+    (フル幅・両端0埋め)をmap_combinedに適用してからmu/sigmaと減算するため、
+    mu/sigmaがslice_edge_excluded(幅縮小)で較正されていると形状不一致になる。
+    """
+    c = synthetic_scoring_components()
+    image_raw = torch.from_numpy(c['image_np'].transpose(2, 0, 1)[None]).float()
+    edge_mask_w = 2
+    torch.manual_seed(4)
+    sliced_w = c['map_w'] - 2 * edge_mask_w
+    mu = torch.rand(c['map_h'], sliced_w).numpy() * 0.05
+    sigma = torch.rand(c['map_h'], sliced_w).numpy() * 0.04 + 0.01
+    cand1 = {'mu': mu, 'sigma': sigma, 'A': 1.0, 'Z': 3.0, 'T': 1.0}
+    model = _build_model(c, mode='color', cand1=cand1, edge_mask_w=edge_mask_w)
+
+    with torch.no_grad():
+        with pytest.raises(RuntimeError):
+            model(image_raw)
+
+
+def test_forward_with_edge_mask_and_cand1_matches_reference_full_width_mu_sigma(
+    synthetic_scoring_components,
+):
+    """edge_mask_w>0でも、mu/sigmaがフル幅(apply_edge_mask_zero規約)で較正されて
+    いればforwardが成立し、参照実装(_reference_forward_forcing_cand1_branch)と一致する。
+    """
+    c = synthetic_scoring_components()
+    image_raw = torch.from_numpy(c['image_np'].transpose(2, 0, 1)[None]).float()
+    edge_mask_w = 2
+    torch.manual_seed(5)
+    mu = torch.rand(c['map_h'], c['map_w']).numpy() * 0.05
+    sigma = torch.rand(c['map_h'], c['map_w']).numpy() * 0.04 + 0.01
+    cand1 = {'mu': mu, 'sigma': sigma, 'A': 1.0, 'Z': 3.0, 'T': 1.0}
+    model = _build_model(c, mode='color', cand1=cand1, edge_mask_w=edge_mask_w)
 
     with torch.no_grad():
         actual = model(image_raw)
