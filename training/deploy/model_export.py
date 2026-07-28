@@ -169,7 +169,7 @@ class ModelExporter:
         # 候補1 (z-score OR): C# 側で出力の意味・閾値を判別するためメタに記録。
         # score_type=unified のとき output は統合スコア (NG if >= cand1_T)。raw のとき従来通り。
         cand1 = para.get('cand1')
-        c1_enabled = (self.mode == 'monochro' and cand1 is not None)
+        c1_enabled = cand1 is not None
         for k, v in (('cand1_enabled', 'true' if c1_enabled else 'false'),
                      ('cand1_T', str(cand1['T']) if c1_enabled else ''),
                      ('score_type', 'unified' if c1_enabled else 'raw')):

@@ -120,7 +120,23 @@ training/                        # 既存学習パイプライン（pipline.py �
 - **`use_flg` で正解を絞る**（use_flg は AI 学習対象フラグであって正解判定ではない）
 - **`uvicorn` を `--workers 1` 以外で起動**（スケジューラ・再学習キューが多重化する）
 - **参照実装（`docs/reference/`）を `src` に丸ごとコピー**（TDD の RED が成立しない・二重管理）
-- **学習ロジック（`training/` の学習本体）を改変**（許可された薄いラッパ改修＝`skip_download`/`skip_upload` のみ）
+- **学習ロジック（`training/` の学習本体）を改変**（許可された薄いラッパ改修＝`skip_download`/`skip_upload` のみ。
+  例外: データセット参照方式の変更（FTP→export_root、@.kiro/specs/retraining/dataset-export-root-migration.md）に限り、
+  ①データ取得・選定前処理部分（`training/dataset/`・`training/utils/ftp_common.py`・`training/utils/image_preprocessing.py`・
+  `training/pipline.py` のオーケストレーション部分＝import文・FTPダウンロードステージ呼び出し 等）、
+  ②`training/train/monochro.py` の DataLoader 構築部分（マージンあり/なしデータの合体・`RawShiftImageFolder` 呼び出し方式）
+  の改変を承認済み。損失関数・モデル構造・学習ループ・color側の学習ロジックは対象外・変更不可のまま。
+  さらに例外: color の異常スコア算出方式に限り、z-score方式（candidate1, `max(raw/A, z/Z)`）の追加を承認済み
+  （color_no=001 のパイロット限定・config opt-in、@.kiro/specs/retraining/color-anomaly-score-cand1-pilot.md）。
+  対象: `training/train/color.py`（cand1較正呼び出しの追加）、`training/model.py`（cand1ゲートのモード非依存化）、
+  `training/utils/candidate1_calib.py`（sigma_smooth/sigma_floor_pct拡張）、`training/deploy/model_export.py`
+  （ONNXメタデータのcand1_enabled/score_type判定をモード非依存化。`model.py`と同一基準に統一する修正）。
+  それ以外のcolor側の学習ロジックは引き続き対象外・変更不可のまま。
+  さらに例外: 本番（Blackwell GPU）での実行に限り、`training/requirements.txt` の torch/torchvision を
+  cu128系（Blackwell対応版、2.7/2.8系目安）へバージョンアップすることを承認済み
+  （@.kiro/specs/deployment/production-deployment-design.md）。損失関数・モデル構造・学習ループ・
+  DataLoader構築等の学習ロジック本体は対象外・変更不可のまま。バージョンアップ後は monochro/color
+  既存モデルのONNX推論結果をdev（cu121）と比較する回帰確認を必須とする）
 - spec と実装が食い違ったとき、**spec を直さずコードを優先**すること
 
 ---
@@ -152,6 +168,7 @@ training/                        # 既存学習パイプライン（pipline.py �
 
 ### Spec（正・`.kiro/specs/<feature>/`）
 - requirements / design / tasks を機能ごとに保持（foundation・daily-aggregation・threshold・dashboard・task・color・model-retraining・edge）
+- `@.kiro/specs/deployment/production-deployment-design.md` | 本番（Shisui_trainPC）デプロイ設計（ADR）
 
 ### 資料の正・参照（`docs/reference/`）
 | ファイル | 概要 |
@@ -161,6 +178,7 @@ training/                        # 既存学習パイプライン（pipline.py �
 | `@docs/reference/retraining-integration-answers.md` | 既存学習パイプライン連携の事実 |
 | `@docs/reference/retraining-file-index.md` | 実装ファイルの配置先インデックス |
 | `@docs/reference/cc-sdd-impl-playbook.md` | cc-sdd 実装手順・指示文雛形 |
+| `@docs/reference/test-overview.md` | 現在実装済みテストの内容一覧（業務ロジック=Service層を重点整理） |
 | `@docs/reference/<feature>/...` | 各機能の参照実装（src と同構成・コピー禁止） |
 
 > 新規ドキュメント作成時は本 INDEX に追記する。

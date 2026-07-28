@@ -171,6 +171,28 @@ def test_export_onnx_matches_eager_model_color(tmp_path):
     assert meta["score_type"] == "raw"
 
 
+def test_export_onnx_matches_eager_model_color_cand1(tmp_path):
+    """color+cand1有効構成でもONNX出力・メタデータがcand1を正しく反映することを確認する。
+
+    color candidate1 pilot(決定3)でmodel.pyのcand1ゲートはモード非依存化したが、
+    ModelExporter.export_onnx()のメタデータ判定(c1_enabled)は
+    `self.mode == 'monochro' and cand1 is not None` のままモード限定されており、
+    実際のONNX挙動(unified出力)とメタデータ(score_type=raw)が矛盾するバグがあった。
+    """
+    built = _build_synthetic_model_dir(tmp_path, mode="color", cand1_enabled=True)
+    onnx_path = ModelExporter(built["cfg"]).export_onnx()
+
+    onnx_output, session = _run_onnx(onnx_path, built["image_np"])
+    eager_output = _run_eager(built, mode="color")
+
+    np.testing.assert_allclose(onnx_output, eager_output, rtol=1e-3, atol=1e-3)
+
+    meta = dict(session.get_modelmeta().custom_metadata_map)
+    assert meta["cand1_enabled"] == "true"
+    assert meta["cand1_T"] == str(built["para"]["cand1_T"])
+    assert meta["score_type"] == "unified"
+
+
 def test_export_onnx_matches_eager_model_monochro_cand1(tmp_path):
     """monochro+cand1有効構成でONNX出力とeager実行が一致することを確認する。"""
     built = _build_synthetic_model_dir(tmp_path, mode="monochro", cand1_enabled=True)
