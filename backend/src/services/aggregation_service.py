@@ -11,7 +11,8 @@ app_db（業者検査 DB・読み取り専用）の当日パーティション�
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
@@ -27,6 +28,11 @@ from src.repositories.daily_metrics_repository import (
 # 分子=全カメラ／分母=monochro。monochro はカメラ機種コードで判定
 # （開発用ダミー値 camera1_image・実機コード CA-HL04MX）。フルタプル・号機は NULL を空文字へ寄せる。
 _MONOCHRO_CAMERA_MODELS = ("camera1_image", "CA-HL04MX")
+
+# `date.today()` はコンテナのシステムTZ（既定 UTC）に依存し、JST 02:00 実行時は
+# 前日の UTC 日付になってしまう（日次＝JST日の不変条件と不整合）ため、
+# 明示的に JST で「今日」を解決する。
+_JST = ZoneInfo("Asia/Tokyo")
 
 _AGG_QUERY = text("""
 WITH ann AS (
@@ -92,7 +98,7 @@ class AggregationService:
     ) -> None:
         """直近 n 日（既定 `AGG_WINDOW_DAYS`）を再集計する（後追いアノテーション反映）。"""
         days = window_days if window_days is not None else settings.AGG_WINDOW_DAYS
-        end = end_date if end_date is not None else date.today()
+        end = end_date if end_date is not None else datetime.now(_JST).date()
         for offset in range(days):
             self.aggregate_day(end - timedelta(days=offset))
 

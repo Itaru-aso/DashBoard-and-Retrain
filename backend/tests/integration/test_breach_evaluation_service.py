@@ -201,3 +201,28 @@ def test_no_auto_close(db_session: Session) -> None:
     tasks = TaskRepository(db_session).list()
     assert len(tasks) == 1
     assert tasks[0].status == "OPEN"  # 閾値内に戻っても自動クローズしない
+
+
+@pytest.mark.integration
+def test_evaluate_default_end_date_uses_jst(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """end_date 省略時、コンテナのシステムTZ（既定 UTC）に依存せず JST で「今日」を解決する。"""
+    from zoneinfo import ZoneInfo
+
+    from src.services import breach_evaluation_service as module
+    from src.services.breach_evaluation_service import BreachEvaluationService
+
+    captured: dict[str, object] = {}
+
+    class FakeDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            captured["tz"] = tz
+            return datetime(2026, 7, 29, 2, 30, tzinfo=tz)
+
+    monkeypatch.setattr(module, "datetime", FakeDatetime)
+
+    BreachEvaluationService(db_session).evaluate(window_days=1)
+
+    assert captured["tz"] == ZoneInfo("Asia/Tokyo")
