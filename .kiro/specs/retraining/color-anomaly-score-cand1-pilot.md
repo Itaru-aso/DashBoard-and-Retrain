@@ -598,5 +598,36 @@ train_step=38550（全量学習、early stopping未発動）。同一テスト�
 仮説は支持されなかった。むしろcolor_jitter強度0.2は有効に働いていたと判断できる。**この変更は
 不採用**とし、`color_jitter_brightness/contrast/saturation=0.2`を維持する。
 
-これで3実験連続でaugmentation強度を弱める方向はいずれもベースラインより悪化しており、
-現行のaugmentation設定（既定値）が概ね適切であるという傾向が見えている。
+#### 実験4: augmentation.color（AE分岐）のae_gaussian_noise_std 0.02→0.01・ae_gaussian_blur_sigma_max 1.0→0.5
+
+train_step=38550（全量学習、early stopping未発動）。同一テストセットで検証:
+
+```
+閾値  | ベースライン(epochs=50, 決定17) FPR/検知率 | 実験4(AE noise/blur弱め) FPR/検知率
+0.60  | 0.74%(9枚)  / 83.5%(96/115)                  | 0.41%(5枚)  / 80.0%(92/115)
+0.65  | 0.41%(5枚)  / 83.5%(96/115)                  | 0.33%(4枚)  / 79.1%(91/115)
+0.70  | 0.33%(4枚)  / 81.7%(94/115)                  | 0.25%(3枚)  / 76.5%(88/115)
+```
+
+**結果**: 同一FPR水準（FPR0.41%でベースライン閾値0.65=83.5% vs 実験4閾値0.60=80.0%、FPR0.33%で
+ベースライン閾値0.70=81.7% vs 実験4閾値0.65=79.1%）で実験4もベースラインより悪化（-2.6〜3.5pt）。
+「AE分岐のノイズ/ブラーが強すぎて無教師分岐の復元精度を下げている」という仮説は支持されなかった。
+むしろ現行のノイズ/ブラー強度は有効に働いていたと判断できる。**この変更は不採用**とし、
+`ae_gaussian_noise_std=0.02`・`ae_gaussian_blur_sigma_max=1.0`を維持する。
+
+#### 決定18 総括
+
+4実験すべて（random_erasing_p、grayscale_p、color_jitter、AE noise/blur）で、augmentation強度を
+弱める方向はいずれも同一FPR水準でベースラインより悪化した（-2.6〜7.8pt）。すなわち「augmentationが
+小さな異物・薄い汚れの信号を消して学習を妨げている」という当初の仮説はすべて否定され、逆に
+**現行のaugmentation設定（既定値）がいずれも正則化として有効に働いている**ことが一貫して確認された。
+
+**結論・推奨**: augmentation関連パラメータ（`random_erasing_p`/`grayscale_p`/`color_jitter`/
+AE noise・blur）はいずれも変更不要、既定値を維持する。316の本番候補モデルは決定17のepochs=50
+モデル（`epochs=50, max_train_step=45000, channel_weights`デフォルト、augmentationは既定値）を
+継続採用する。推奨閾値は決定17と同じ**0.65〜0.70**（FPR 0.33〜0.41%、検知率81.7〜83.5%）。
+
+**限界**: 各augmentationパラメータは1点のみの比較（弱める方向のみ）であり、強める方向や
+他のパラメータ（`lr`/`weight_decay`、`channel_weights.unsupervised_power`等）は未検証。
+今後さらに追い込む場合は、001など他色番号での再現性確認、またはlr等の最適化ハイパラの
+検証が次の候補となる。
