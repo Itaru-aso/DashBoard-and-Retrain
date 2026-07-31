@@ -18,10 +18,10 @@ common:
   pool_base: ./3_pool
   splits_dir: ./5_splits
   # dataset選定元 (export_root直接変換。backendがdataset_idを解決しCLI overrideで渡す)
-  export_root: ./export_root
+  export_root: '\\digi2\止水F色物画像検査\画像データ\export_root'
   dataset_id_monochro: ''
   dataset_id_color: ''
-  margin_export_root: ./export_root_margin
+  margin_export_root: '\\digi2\止水F色物画像検査\画像データ\export_root_margin'
   dataset_id_monochro_margin: ''
   batch_size: 4
   persistent_workers: true   # ワーカーをエポック間で使い回す (Windows spawn の再起動ストーム回避)
