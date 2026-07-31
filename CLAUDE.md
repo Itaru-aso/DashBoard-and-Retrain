@@ -169,6 +169,7 @@ training/                        # 既存学習パイプライン（pipline.py �
 ### Spec（正・`.kiro/specs/<feature>/`）
 - requirements / design / tasks を機能ごとに保持（foundation・daily-aggregation・threshold・dashboard・task・color・model-retraining・edge）
 - `@.kiro/specs/deployment/production-deployment-design.md` | 本番（Shisui_trainPC）デプロイ設計（ADR）
+- `@.kiro/specs/ui-redesign/design.md` | UIリデザイン設計（藍染テキスタイル・ADR。フロントのみ・API不変）
 
 ### 資料の正・参照（`docs/reference/`）
 | ファイル | 概要 |
