@@ -64,6 +64,7 @@ def create_job(payload: JobCreateRequest, db: Annotated[Session, Depends(get_db)
         chain=payload.chain,
         tape=tape,
         created_by=payload.created_by,
+        epochs_color=payload.epochs_color,
     )
     db.commit()  # ワーカが別 Session で読めるよう、投入前に確定
     db.refresh(job)

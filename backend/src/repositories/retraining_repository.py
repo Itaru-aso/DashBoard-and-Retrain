@@ -37,6 +37,7 @@ class RetrainingRepository:
         chain: str,
         tape: str = "",
         created_by: str | None = None,
+        epochs_color: int | None = None,
     ) -> RetrainingJob:
         """ジョブを QUEUED で作成する。"""
         job = RetrainingJob(
@@ -47,6 +48,7 @@ class RetrainingRepository:
             status=JobStatus.QUEUED.value,
             queued_at=_now(),
             created_by=created_by,
+            epochs_color=epochs_color,
         )
         self._db.add(job)
         self._db.flush()  # id 採番

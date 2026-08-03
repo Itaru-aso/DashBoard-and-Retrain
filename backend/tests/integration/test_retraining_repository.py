@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from sqlalchemy.orm import Session
 
@@ -24,6 +26,21 @@ def test_create_job_defaults_queued(db_session: Session) -> None:
     assert job.tape == ""
     assert job.created_by == "aso"
     assert repo.get(job.id) is not None
+
+
+@pytest.mark.integration
+def test_create_job_defaults_epochs_color_to_none(db_session: Session) -> None:
+    repo = _repo(db_session)
+    job = repo.create_job(color_no="001", size="05", chain="CZT8")
+    assert job.epochs_color is None
+
+
+@pytest.mark.integration
+def test_create_job_persists_epochs_color_override(db_session: Session) -> None:
+    repo = _repo(db_session)
+    job = repo.create_job(color_no="001", size="05", chain="CZT8", epochs_color=50)
+    assert job.epochs_color == 50
+    assert repo.get(job.id).epochs_color == 50
 
 
 @pytest.mark.integration
@@ -52,7 +69,17 @@ def test_status_transitions_persist(db_session: Session) -> None:
 
 
 @pytest.mark.integration
-def test_updated_at_advances_on_transition(db_session: Session) -> None:
+def test_updated_at_advances_on_transition(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.repositories import retraining_repository as rr
+
+    # ウォールクロックの分解能に依存させない（同一ティックでの2連続呼び出しでも
+    # 必ず前進することを保証するため、_now() を明示的に単調増加させる）。
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    ticks = iter(base + timedelta(microseconds=i) for i in range(100))
+    monkeypatch.setattr(rr, "_now", lambda: next(ticks))
+
     repo = _repo(db_session)
     job = repo.create_job(color_no="001", size="05", chain="CZT8")
 

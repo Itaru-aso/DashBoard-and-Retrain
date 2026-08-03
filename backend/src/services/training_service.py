@@ -126,7 +126,9 @@ class TrainingConfig:
         """
         return _find_dataset_id(self.margin_export_root, f"monochro_{size}_{chain}")
 
-    def build_command(self, color_no: str, size: str, chain: str) -> list[str]:
+    def build_command(
+        self, color_no: str, size: str, chain: str, color_epochs: int | None = None
+    ) -> list[str]:
         """起動コマンドを組み立てる（色番は文字列で渡す）。
 
         `common.model_dir` は `TRAINING_MODEL_DIR`（env）を単一の正として明示上書きする
@@ -137,6 +139,9 @@ class TrainingConfig:
         既定値（空文字）を上書きしてしまう（`os.path.join` に None を渡すと TypeError になる等、
         空文字より扱いにくい）ため、見つからない場合はキー自体を送らず config.yaml の既定
         （空文字）に委ねる。
+
+        `color_epochs`: color 学習の epochs 上書き（ジョブの `epochs_color` から。未指定＝None
+        なら送らず config.yaml 既定値=40 に委ねる。monochro は対象外）。
         """
         dataset_id_monochro = self.resolve_dataset_id("monochro", size, chain)
         dataset_id_color = self.resolve_dataset_id("color", size, chain)
@@ -152,6 +157,8 @@ class TrainingConfig:
             overrides.append(f"common.dataset_id_color={dataset_id_color}")
         if dataset_id_monochro_margin:
             overrides.append(f"common.dataset_id_monochro_margin={dataset_id_monochro_margin}")
+        if color_epochs is not None:
+            overrides.append(f"color.epochs={color_epochs}")
         if self.export_root:
             overrides.append(f"common.export_root={self.export_root}")
         if self.margin_export_root:
@@ -370,14 +377,14 @@ class TrainingService:
             return
         # tape はここでは CLI override に使わない（dataset_id 解決の name 規約に含まれない）が、
         # 完了後の ONNX パス解決（タスク17）・配信ファイル名解決（タスク18・保留）に使うため保持する。
-        color_no, size, chain, tape = tup
+        color_no, size, chain, tape, epochs_color = tup
 
         await asyncio.to_thread(self._db_mark_running, job_id)
         self._hub.publish(
             job_id, f"[STATUS] RUNNING color={color_no} size={size} chain={chain} tape={tape}"
         )
 
-        cmd = self._cfg.build_command(color_no, size, chain)
+        cmd = self._cfg.build_command(color_no, size, chain, color_epochs=epochs_color)
         self._hub.publish(job_id, f"[CMD] (cwd={self._cfg.training_dir}) {' '.join(cmd)}")
 
         saw_completion = False
@@ -499,12 +506,12 @@ class TrainingService:
         finally:
             db.close()
 
-    def _db_get_tuple(self, job_id: int) -> tuple[str, str, str, str] | None:
+    def _db_get_tuple(self, job_id: int) -> tuple[str, str, str, str, int | None] | None:
         with self._session_scope() as db:
             job = RetrainingRepository(db).get(job_id)
             if job is None:
                 return None
-            return (job.color_no, job.size, job.chain, job.tape)
+            return (job.color_no, job.size, job.chain, job.tape, job.epochs_color)
 
     def _db_mark_running(self, job_id: int) -> None:
         with self._session_scope() as db:

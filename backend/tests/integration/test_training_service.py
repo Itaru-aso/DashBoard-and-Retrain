@@ -193,6 +193,20 @@ def test_build_command_omits_export_root_overrides_when_unset(tmp_path: object) 
     assert not any(c.startswith("common.margin_export_root=") for c in cmd)
 
 
+@pytest.mark.integration
+def test_build_command_appends_color_epochs_override_when_set(tmp_path: object) -> None:
+    cfg = _cfg(tmp_path)
+    cmd = cfg.build_command("501", "5", "YY", color_epochs=50)
+    assert "color.epochs=50" in cmd
+
+
+@pytest.mark.integration
+def test_build_command_omits_color_epochs_override_when_unset(tmp_path: object) -> None:
+    cfg = _cfg(tmp_path)
+    cmd = cfg.build_command("501", "5", "YY")
+    assert not any(c.startswith("color.epochs=") for c in cmd)
+
+
 def _write_dataset_metadata(export_root: object, dataset_id: str, name: str) -> None:
     # metadata.json の "id" はフォルダ名（dataset_id）とは別物（実データでも一致しない）。
     # resolve_dataset_id はフォルダ名を返す実装であることをテストで固定するため、意図的に
@@ -235,6 +249,45 @@ def test_resolve_dataset_id_returns_empty_when_not_found(tmp_path: object) -> No
     )
 
     assert cfg.resolve_dataset_id("monochro", "9", "ZZ") == ""
+
+
+@pytest.mark.integration
+def test_resolve_dataset_id_skips_dir_without_metadata_json(tmp_path: object) -> None:
+    """metadata.json が無いサブディレクトリは無視し、他の一致候補を探し続ける。"""
+    from src.services.training_service import TrainingConfig
+
+    export_root = os.path.join(str(tmp_path), "export_root")
+    os.makedirs(os.path.join(export_root, "no-metadata-dir"), exist_ok=True)
+    _write_dataset_metadata(export_root, "ds-mono-1", "monochro_5_YY")
+
+    cfg = TrainingConfig(
+        training_dir=str(tmp_path),
+        model_dir=os.path.join(str(tmp_path), "6_model"),
+        export_root=export_root,
+    )
+
+    assert cfg.resolve_dataset_id("monochro", "5", "YY") == "ds-mono-1"
+
+
+@pytest.mark.integration
+def test_resolve_dataset_id_skips_malformed_metadata_json(tmp_path: object) -> None:
+    """metadata.json が壊れている（JSON不正）サブディレクトリは無視し、例外を伝播しない。"""
+    from src.services.training_service import TrainingConfig
+
+    export_root = os.path.join(str(tmp_path), "export_root")
+    broken_dir = os.path.join(export_root, "broken-dir")
+    os.makedirs(broken_dir, exist_ok=True)
+    with open(os.path.join(broken_dir, "metadata.json"), "w", encoding="utf-8") as f:
+        f.write("{not valid json")
+    _write_dataset_metadata(export_root, "ds-mono-1", "monochro_5_YY")
+
+    cfg = TrainingConfig(
+        training_dir=str(tmp_path),
+        model_dir=os.path.join(str(tmp_path), "6_model"),
+        export_root=export_root,
+    )
+
+    assert cfg.resolve_dataset_id("monochro", "5", "YY") == "ds-mono-1"
 
 
 @pytest.mark.integration
@@ -323,12 +376,16 @@ def _status(session_factory: Callable[[], Session], job_id: int) -> str:
         db.close()
 
 
-def _create_job(session_factory: Callable[[], Session], color: str) -> int:
+def _create_job(
+    session_factory: Callable[[], Session], color: str, epochs_color: int | None = None
+) -> int:
     from src.repositories.retraining_repository import RetrainingRepository
 
     db = session_factory()
     try:
-        job = RetrainingRepository(db).create_job(color, "05", "CZT8", "")
+        job = RetrainingRepository(db).create_job(
+            color, "05", "CZT8", "", epochs_color=epochs_color
+        )
         db.commit()
         return job.id
     finally:
@@ -572,6 +629,69 @@ def test_command_contains_expected_overrides(monkeypatch, tmp_path, session_fact
     assert "common.dataset_id_monochro_margin=" not in cmd
     assert captured["cwd"] == cfg.training_dir
     assert captured["start_new_session"] is True  # プロセスグループ化
+
+
+@pytest.mark.integration
+def test_command_contains_epochs_color_override_from_job(
+    monkeypatch, tmp_path, session_factory
+) -> None:
+    """ジョブの epochs_color がワーカー実行時のコマンドに反映される（DB→build_commandの配線）。"""
+    from src.services.training_service import TrainingService
+
+    cfg = _cfg(tmp_path)
+    _stub_process_group(monkeypatch)
+    captured: dict = {}
+
+    def factory(cmd, kw):
+        captured["cmd"] = cmd
+        return FakeProcess(["パイプライン完了"], on_wait=lambda: _make_onnx(cfg, "501"))
+
+    _install_fake_subprocess(monkeypatch, factory)
+
+    async def scenario() -> None:
+        svc = TrainingService(session_factory, cfg)
+        await svc.start()
+        jid = _create_job(session_factory, "501", epochs_color=50)
+        svc.enqueue(jid)
+        await _drain(svc, jid)
+        await svc.stop()
+
+    asyncio.run(scenario())
+
+    assert "color.epochs=50" in captured["cmd"]
+
+
+@pytest.mark.integration
+def test_recover_on_start_fails_running_and_requeues_queued(tmp_path, session_factory) -> None:
+    """起動時復旧: 消えた RUNNING は FAILED に確定し、QUEUED は再投入される。"""
+    from src.repositories.retraining_repository import RetrainingRepository
+    from src.services.training_service import TrainingConfig, TrainingService
+
+    db = session_factory()
+    try:
+        repo = RetrainingRepository(db)
+        running_job = repo.create_job("501", "05", "CZT8")
+        repo.mark_running(running_job.id)
+        running_job_id = running_job.id
+        queued_job_id = repo.create_job("502", "05", "CZT8").id
+        db.commit()
+    finally:
+        db.close()
+
+    cfg = TrainingConfig(training_dir=str(tmp_path), model_dir=str(tmp_path / "6_model"))
+    svc = TrainingService(session_factory, cfg)
+
+    svc._recover_on_start()
+
+    db2 = session_factory()
+    try:
+        repo2 = RetrainingRepository(db2)
+        assert repo2.get(running_job_id).status == "FAILED"
+        assert repo2.get(queued_job_id).status == "QUEUED"  # DB 上は再投入で書き換えない
+    finally:
+        db2.close()
+
+    assert svc._queue.get_nowait() == queued_job_id
 
 
 @pytest.mark.integration

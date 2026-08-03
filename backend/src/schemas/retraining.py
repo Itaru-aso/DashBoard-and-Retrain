@@ -18,6 +18,9 @@ class JobCreateRequest(BaseModel):
     chain: str
     tape: str = ""
     created_by: str | None = None
+    # color 学習の epochs 上書き（任意。未指定なら training/ 側 config.yaml 既定値=40）。
+    # monochro は対象外（316 の ADR チューニングが color 限定のため）。
+    epochs_color: int | None = None
 
 
 class JobResponse(BaseModel):
@@ -38,6 +41,7 @@ class JobResponse(BaseModel):
     onnx_monochro_path: str | None
     onnx_color_path: str | None
     created_by: str | None
+    epochs_color: int | None
     created_at: datetime
     updated_at: datetime
 

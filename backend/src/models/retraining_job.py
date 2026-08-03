@@ -11,7 +11,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Index, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.database import Base
@@ -60,6 +60,10 @@ class RetrainingJob(Base):
 
     # 起票者（作業者手動起票・任意）。
     created_by: Mapped[str | None] = mapped_column(String(100), default=None)
+
+    # color 学習の epochs 上書き（任意。未指定なら training/ 側 config.yaml 既定値=40を使う。
+    # monochro は対象外＝316の ADR チューニングが color 限定のため）。
+    epochs_color: Mapped[int | None] = mapped_column(Integer, default=None)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

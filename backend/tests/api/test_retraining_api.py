@@ -113,6 +113,24 @@ def test_create_job_ok_enqueues(make_client, session_factory) -> None:
 
 
 @pytest.mark.api
+def test_create_job_with_epochs_color_persists_override(make_client, session_factory) -> None:
+    _seed_color(session_factory)
+    client = make_client()
+    r = client.post("/api/retraining/jobs", json={**_BODY, "epochs_color": 50})
+    assert r.status_code == 201
+    assert r.json()["epochs_color"] == 50
+
+
+@pytest.mark.api
+def test_create_job_without_epochs_color_defaults_to_none(make_client, session_factory) -> None:
+    _seed_color(session_factory)
+    client = make_client()
+    r = client.post("/api/retraining/jobs", json=_BODY)
+    assert r.status_code == 201
+    assert r.json()["epochs_color"] is None
+
+
+@pytest.mark.api
 def test_create_job_rejects_unknown_color(make_client, session_factory) -> None:
     client = make_client()  # color_master に何も seed しない
     r = client.post("/api/retraining/jobs", json={**_BODY, "color_no": "999"})

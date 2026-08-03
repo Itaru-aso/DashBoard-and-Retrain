@@ -19,6 +19,15 @@ def test_job_create_valid_and_tape_default() -> None:
     assert req.color_no == "001"
     assert req.tape == ""  # 既定（空文字もキーの一部）
     assert req.created_by is None
+    assert req.epochs_color is None  # 既定（未指定＝config.yaml側epochs既定値に委ねる）
+
+
+@pytest.mark.unit
+def test_job_create_accepts_epochs_color_override() -> None:
+    from src.schemas.retraining import JobCreateRequest
+
+    req = JobCreateRequest(color_no="001", size="05", chain="CZT8", epochs_color=50)
+    assert req.epochs_color == 50
 
 
 @pytest.mark.unit
@@ -47,6 +56,7 @@ def test_job_response_from_attributes() -> None:
         onnx_monochro_path = None
         onnx_color_path = None
         created_by = "aso"
+        epochs_color = None
         created_at = datetime(2026, 7, 1, tzinfo=timezone.utc)
         updated_at = datetime(2026, 7, 1, tzinfo=timezone.utc)
 
