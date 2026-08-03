@@ -1,26 +1,72 @@
 :root {
-  --color-bg: #070b14;
-  --color-panel-header: rgba(9, 14, 24, 0.62);
-  --color-panel-sidebar: rgba(9, 14, 24, 0.42);
-  --color-border: rgba(255, 255, 255, 0.08);
+  /* 面 */
+  --color-bg: #f4f1e8; /* 本文地（生成り） */
+  --color-surface: #fdfcf8; /* カード面 */
+  --color-surface-sunken: #ece7d8; /* インセット・テーブルヘッダ帯 */
+  --color-border: #ddd6c4; /* 罫線（強） */
+  --color-border-subtle: #ece7d8; /* 罫線（弱・テーブル行） */
 
-  --color-text-primary: #f2f6fb;
-  --color-text-secondary: #9fb0c4;
-  --color-text-muted: #6f7c90;
+  /* 藍（ブランド面） */
+  --color-indigo-deep: #1c3a63; /* ヘッダ・選択中ナビ地・コンソール */
+  --color-indigo: #22406b; /* サイドバー・主ボタン・リンク */
+  --color-indigo-text: #1c3a63; /* KPI大数字 */
+  --color-on-indigo: #f4f1e8; /* 藍面上の文字 */
+  --color-on-indigo-muted: #aebedb;
 
-  --color-accent-cyan: #22d3ee;
-  --color-accent-purple: #a78bfa;
-  --color-accent-success: #34d399;
+  /* 文字 */
+  --color-text-primary: #2b2a26;
+  --color-text-secondary: #6f6a5c;
+  --color-text-muted: #9b9481;
 
-  --font-sans: "Noto Sans JP", system-ui, -apple-system, "Yu Gothic UI", "Meiryo", sans-serif;
+  /* 署名モチーフ（縫い目） */
+  --color-stitch: #d9a441;
+
+  /* 状態（文字・縁・地の3点セット） */
+  --color-ok: #40693c;
+  --color-ok-border: #9dbb98;
+  --color-ok-bg: #f2f6f0;
+  --color-warn: #93661a;
+  --color-warn-border: #d9bb7a;
+  --color-warn-bg: #faf5e8;
+  --color-bad: #b3402e;
+  --color-bad-border: #dba49a;
+  --color-bad-bg: #faefec;
+
+  /* チャート（dataviz バリデータ PASS 済み・design.md §2.3） */
+  --chart-series-1: #3568ad;
+  --chart-series-2: #a87400;
+  --chart-threshold: #b3402e;
+  --chart-grid: #ece7d8;
+  --chart-axis: #ddd6c4;
+
+  /* タイポグラフィ */
+  --font-sans: "Zen Kaku Gothic New", system-ui, "Yu Gothic UI", "Meiryo", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  --font-size-title: 32px;
-  --font-size-heading: 24px;
+  --font-size-title: 20px;
+  --font-size-heading: 16px;
+  --font-size-body: 14px;
+  --font-size-caption: 12px;
+  --font-size-kpi: 26px;
+
+  /* 形状・間隔 */
+  --radius: 5px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+
+  /* 未移行ページが参照中（タスク5・9で --color-ok 等へ移行後、値の見直しまたは削除を検討） */
   --font-size-judgment: 40px;
-  --font-size-kpi: 28px;
-  --font-size-body: 16px;
-  --font-size-caption: 14px;
+  --color-accent-success: #34d399;
+
+  /* 廃止予定トークン（design.md §3）。未移行ページ（タスク3・6・7・9・10）が参照中のため
+     値は変更しない。タスク11で参照ゼロを確認後に削除する。 */
+  --color-panel-header: rgba(9, 14, 24, 0.62);
+  --color-panel-sidebar: rgba(9, 14, 24, 0.42);
+  --color-accent-cyan: #22d3ee;
+  --color-accent-purple: #a78bfa;
 }
 
 body {

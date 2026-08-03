@@ -26,7 +26,7 @@
 
 ## タスク (Tasks)
 
-- [ ] **1. デザイントークン全面差し替え + フォント基盤**
+- [x] **1. デザイントークン全面差し替え + フォント基盤**
   - `frontend/src/styles/tokens.css` の `:root` を design.md §3 の定義で全面差し替え
     （面・藍・文字・署名モチーフ・状態3点セット・チャート・タイポグラフィ・形状/間隔）。
     現行トークン名（`--color-bg` 等）は可能な限り維持し値のみ更新する（design.md §3 方針）。
@@ -35,8 +35,15 @@
     参照が壊れるのを防ぐ）。廃止トークンの**削除**と参照ゼロ確認はタスク11で行う。
   - `frontend/src/styles/fonts.css`（既存・JetBrains Mono の `@font-face` 定義済み）に
     Zen Kaku Gothic New（400/500/700）の `@font-face` を追加。`frontend/public/fonts/` に woff2 配置。
+    サブセットは `frontend/scripts/subset_japanese_font.py`（常用漢字2136字相当＋かな全域＋
+    半角ASCII＋frontend/src 実在文字）で再現可能に生成する。
   - `body` 既定スタイル（`main.tsx` 読み込み対象）を新トークンに追随。
+  - **後続の申し送り**: タスク3・6〜10でページ本文の新規文言（design.md 由来の語彙含む）が
+    確定したら `python frontend/scripts/subset_japanese_font.py` を再実行し、
+    フォントサブセットを最新の実文言に合わせて更新する（タスク11の検証ゲート前に必ず実施）。
   - 検証: `npm run dev` で背景色・フォントが適用されることを目視確認（自動テスト対象外）。
+    `tsc --noEmit`／`eslint .`／`vitest run` は本タスクの変更（CSS/フォント資産のみ）で
+    リグレッションが無いことを確認済み（13 files / 72 tests pass）。
   - Refs: R1, R6 ／ commit: `feat(ui-redesign): replace design tokens and self-host Zen Kaku Gothic New`
 
 - [ ] **2. 共通UI部品の新設**
@@ -112,11 +119,13 @@
   - 代替検証: `npm run dev` で実行中ジョブがあれば目視確認、無ければジョブカードの静的表示を確認。
   - Refs: R4 ／ commit: `feat(ui-redesign): restyle retraining page`
 
-- [ ] **11. 仕上げ: 廃止トークンの削除・一括確認・検証ゲート**
+- [ ] **11. 仕上げ: 廃止トークンの削除・フォント再サブセット・一括確認・検証ゲート**
   - タスク1で残していた廃止トークン定義（`--color-accent-cyan` / `--color-accent-purple` /
     `--color-panel-header` / `--color-panel-sidebar` 等）を `tokens.css` から削除。
   - `grep -rn "accent-cyan\|accent-purple\|panel-header\|panel-sidebar" frontend/src` で
     参照が残っていないことを確認（R1.2, R8.4）。
+  - `python frontend/scripts/subset_japanese_font.py` を再実行し、全ページの確定文言を
+    反映した最終版フォントサブセットに更新する（タスク1の申し送り）。
   - `tsc --noEmit`・`eslint .`・`vitest run` をグリーンに。
   - `npm run dev` で全6ページを通し目視確認し、スクリーンショットを提示（R8.2）。
   - commit: `chore(ui-redesign): remove deprecated tokens and satisfy verification gate`
