@@ -54,7 +54,7 @@
     クリックハンドラ呼び出し等）。
   - Refs: R2 ／ commit: `feat(ui-redesign): add shared ui components`
 
-- [ ] **3. 共通シェルの視覚刷新（`Header`/`Sidebar`）**
+- [x] **3. 共通シェルの視覚刷新（`Header`/`Sidebar`）**
   - 既存 `Header.tsx`/`Sidebar.tsx` の CSS を design.md §5 に合わせて更新
     （ヘッダ46px・`--color-indigo-deep`、サイドバー148px・`--color-indigo`、選択中ナビの
     縫い目装飾 `3px dashed var(--color-stitch)`）。コンポーネントの props・構造は変更しない。

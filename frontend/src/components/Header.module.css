@@ -1,13 +1,11 @@
 .header {
-  height: 62px;
+  height: 46px;
   flex: none;
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 0 20px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-panel-header);
-  backdrop-filter: blur(14px);
+  background: var(--color-indigo-deep);
 }
 
 .logo {
@@ -17,19 +15,19 @@
 }
 
 .logoIcon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: linear-gradient(140deg, var(--color-accent-cyan), var(--color-accent-purple));
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius);
+  background: var(--color-on-indigo-muted);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .logoIcon span {
-  width: 10px;
-  height: 10px;
-  background: var(--color-bg);
+  width: 8px;
+  height: 8px;
+  background: var(--color-indigo-deep);
   transform: rotate(45deg);
   border-radius: 1.5px;
 }
@@ -44,13 +42,13 @@
   font-size: var(--font-size-body);
   font-weight: 700;
   letter-spacing: 0.5px;
-  color: var(--color-text-primary);
+  color: var(--color-on-indigo);
 }
 
 .subtitle {
   font-size: var(--font-size-caption);
-  color: var(--color-text-muted);
-  letter-spacing: 1.5px;
+  color: var(--color-on-indigo-muted);
+  letter-spacing: 0.5px;
 }
 
 .spacer {
@@ -63,31 +61,31 @@
   gap: 8px;
   padding: 6px 13px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(244, 241, 232, 0.08);
+  border: 1px solid rgba(244, 241, 232, 0.16);
   font-size: var(--font-size-caption);
-  color: var(--color-text-secondary);
+  color: var(--color-on-indigo-muted);
 }
 
 .edgeStatusDot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--color-text-muted);
+  background: var(--color-on-indigo-muted);
 }
 
 .edgeStatusValue {
   font-family: var(--font-mono);
-  color: var(--color-text-primary);
+  color: var(--color-on-indigo);
   font-weight: 600;
 }
 
 .lanBadge {
   padding: 6px 13px;
   border-radius: 999px;
-  background: rgba(34, 211, 238, 0.1);
-  border: 1px solid rgba(34, 211, 238, 0.22);
+  background: rgba(244, 241, 232, 0.08);
+  border: 1px solid rgba(244, 241, 232, 0.16);
   font-size: var(--font-size-caption);
-  color: #7fe3f3;
+  color: var(--color-on-indigo-muted);
   letter-spacing: 0.5px;
 }

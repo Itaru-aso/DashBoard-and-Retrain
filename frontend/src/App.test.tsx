@@ -44,7 +44,7 @@ describe("App", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByText("Shisui")).toBeInTheDocument();
+    expect(screen.getByText("SHISUI")).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "ダッシュボード" })).toHaveAttribute(
       "aria-current",
       "page",

@@ -6,8 +6,8 @@ import Header from "./Header";
 describe("Header", () => {
   it("ロゴ・アプリ名・サブタイトルを表示する", () => {
     render(<Header />);
-    expect(screen.getByText("Shisui")).toBeInTheDocument();
-    expect(screen.getByText("外観検査モニタリング")).toBeInTheDocument();
+    expect(screen.getByText("SHISUI")).toBeInTheDocument();
+    expect(screen.getByText("紫翠 ─ AIモデル管理")).toBeInTheDocument();
   });
 
   it("エッジPC稼働の静的プレースホルダーと「オンプレ LAN」バッジを表示する", () => {

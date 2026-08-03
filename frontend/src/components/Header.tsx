@@ -9,8 +9,8 @@ export default function Header() {
           <span />
         </div>
         <div className={styles.titles}>
-          <span className={styles.appName}>Shisui</span>
-          <span className={styles.subtitle}>外観検査モニタリング</span>
+          <span className={styles.appName}>SHISUI</span>
+          <span className={styles.subtitle}>紫翠 ─ AIモデル管理</span>
         </div>
       </div>
 
@@ -18,7 +18,7 @@ export default function Header() {
 
       <div className={styles.edgeStatus}>
         <span className={styles.edgeStatusDot} />
-        エッジPC <span className={styles.edgeStatusValue}>―/―</span> 稼働
+        エッジPC <span className={styles.edgeStatusValue}>―/―</span> 稼働中
       </div>
       <div className={styles.lanBadge}>オンプレ LAN</div>
     </header>

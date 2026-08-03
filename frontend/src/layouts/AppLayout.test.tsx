@@ -16,7 +16,7 @@ describe("AppLayout", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Shisui")).toBeInTheDocument();
+    expect(screen.getByText("SHISUI")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "ダッシュボード" })).toBeInTheDocument();
     expect(screen.getByText("ダミー画面")).toBeInTheDocument();
   });
