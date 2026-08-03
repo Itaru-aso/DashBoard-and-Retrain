@@ -1,0 +1,23 @@
+.group {
+  display: inline-flex;
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius);
+  padding: 2px;
+  gap: 2px;
+}
+
+.option {
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  font-size: var(--font-size-caption);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.active {
+  background: var(--color-surface);
+  color: var(--color-indigo-text);
+}

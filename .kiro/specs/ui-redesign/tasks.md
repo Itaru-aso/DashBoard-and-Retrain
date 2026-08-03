@@ -46,7 +46,7 @@
     リグレッションが無いことを確認済み（13 files / 72 tests pass）。
   - Refs: R1, R6 ／ commit: `feat(ui-redesign): replace design tokens and self-host Zen Kaku Gothic New`
 
-- [ ] **2. 共通UI部品の新設**
+- [x] **2. 共通UI部品の新設**
   - `frontend/src/components/ui/` に `Panel` / `PageHeader` / `StatTile` / `StatusChip` /
     `Button`（primary/secondary/danger） / `SegmentedControl` / `DataTable` 用スタイル /
     `EmptyState` を新設（CSS Modules・TypeScript strict・named export）。
