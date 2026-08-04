@@ -81,14 +81,24 @@
     定数のみ定義・未使用）。
   - Refs: R5 ／ commit: `feat(ui-redesign): add shared chart theme utility`
 
-- [ ] **5. ダッシュボードページの再構成**
+- [x] **5. ダッシュボードページの再構成**
   - `frontend/src/pages/Dashboard.tsx` を design.md §6.1 に合わせて再構成
     （PageHeader → 期間/号機/色番/サイズのフィルタ行 → KPI4タイル（StatTile・全タイル藍系スパークライン）
     → チャート3面（検査数/NG率2カラム、虚報率・見逃し率全幅）→ 日次明細テーブル）。
-    折れ線の最終点マーカー（`CHART_DOT_RADIUS` 等・タスク4で定義済み）をこのタスクで適用する。
+    折れ線の最終点マーカー（`CHART_DOT_RADIUS` 等・タスク4で定義済み）を適用。
+    期間SegmentedControl・色番/サイズの自由入力継続・状態チップの2値化はdesign.md §6.1
+    追記の通り既存操作フロー維持のための実装時判断。
   - フィルタ・API呼び出し・データ取得ロジックは無変更。共通UI部品（タスク2）・chartTheme（タスク4）を使用。
-  - テスト（Vitest + Testing Library）: 既存テストを維持。KPIタイルの状態チップ・スパークライン描画を追加検証。
-  - 代替検証: `npm run dev`（バックエンド接続）で実データ表示を目視確認。
+  - 実データ目視確認で発見・修正した問題: ①フルタプル不一致（テープ未入力）は既存仕様通りの挙動と確認、
+    ②rate(0-1)と閾値(0-100)のスケール不整合は別コミット`fix(dashboard)`で修正、
+    ③期間クイック設定が`toISOString`でUTC変換され日次(JST)基準からずれるバグを本タスクで修正
+    （ローカル日付部分から組み立てるよう修正）。
+  - テスト（Vitest + Testing Library）: 既存テストを維持。KPIタイルの状態チップ・残りpt・スパークライン、
+    期間クイック設定（ローカル日付一致）を追加検証。
+  - 代替検証: `npm run dev`（バックエンド接続）で実データ表示を目視確認（ユーザー確認済み）。
+  - **後続の申し送り**: チャートの軸・ツールチップは「%」表示のリテラルを付けていない
+    （bare数値のまま）。タスク11またはUX改善の別タスクでtickFormatter/tooltip formatterの
+    追加を検討する。
   - Refs: R4 ／ commit: `feat(ui-redesign): restyle dashboard page`
 
 - [ ] **6. タスクページの再構成**

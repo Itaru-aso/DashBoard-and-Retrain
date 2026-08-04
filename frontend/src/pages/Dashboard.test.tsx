@@ -120,9 +120,16 @@ describe("Dashboard", () => {
   it("チャート配色はdesign.md §7のchartTheme定数に従う（単系列の閾値は赤・2系列は系列色）", () => {
     renderWithClient(<Dashboard />);
 
+    // bar-throughput・line-threshold等・line-fa_threshold・line-miss_thresholdは
+    // メインチャートにしか存在しないため一致で1件のみ。
+    // line-ng_rate/line-false_alarm_rate/line-miss_rateはKPIタイルのスパークライン
+    // （同じdataKeyを使う）と重複するため getAllByTestId で該当色を含むことを確認する。
     expect(screen.getByTestId("bar-throughput")).toHaveAttribute("data-fill", CHART_SERIES_1_COLOR);
 
-    expect(screen.getByTestId("line-ng_rate")).toHaveAttribute("data-stroke", CHART_SERIES_1_COLOR);
+    const ngRateLines = screen.getAllByTestId("line-ng_rate");
+    expect(ngRateLines.some((el) => el.getAttribute("data-stroke") === CHART_SERIES_1_COLOR)).toBe(
+      true,
+    );
     expect(screen.getByTestId("line-threshold")).toHaveAttribute(
       "data-stroke",
       CHART_THRESHOLD_COLOR,
@@ -132,14 +139,14 @@ describe("Dashboard", () => {
       CHART_THRESHOLD_DASH,
     );
 
-    expect(screen.getByTestId("line-false_alarm_rate")).toHaveAttribute(
-      "data-stroke",
-      CHART_SERIES_1_COLOR,
-    );
-    expect(screen.getByTestId("line-miss_rate")).toHaveAttribute(
-      "data-stroke",
-      CHART_SERIES_2_COLOR,
-    );
+    const faRateLines = screen.getAllByTestId("line-false_alarm_rate");
+    expect(
+      faRateLines.some((el) => el.getAttribute("data-stroke") === CHART_SERIES_1_COLOR),
+    ).toBe(true);
+    const missRateLines = screen.getAllByTestId("line-miss_rate");
+    expect(
+      missRateLines.some((el) => el.getAttribute("data-stroke") === CHART_SERIES_2_COLOR),
+    ).toBe(true);
     expect(screen.getByTestId("line-fa_threshold")).toHaveAttribute(
       "data-stroke",
       CHART_SERIES_1_COLOR,
@@ -151,6 +158,83 @@ describe("Dashboard", () => {
 
     // 凡例は2系列以上のチャート（虚報率・見逃し率）にのみ表示する
     expect(screen.getAllByTestId("legend")).toHaveLength(1);
+  });
+
+  it("KPIタイルにスパークライン（藍単色）を表示する", async () => {
+    renderWithClient(<Dashboard />);
+    await screen.findByRole("option", { name: "1" });
+
+    fireEvent.change(screen.getByLabelText("開始日"), { target: { value: "2026-07-01" } });
+    fireEvent.change(screen.getByLabelText("終了日"), { target: { value: "2026-07-03" } });
+    fireEvent.click(screen.getByRole("button", { name: "適用" }));
+    await screen.findByText("14");
+
+    const throughputSparkline = screen.getByTestId("line-throughput");
+    expect(throughputSparkline).toHaveAttribute("data-stroke", CHART_SERIES_1_COLOR);
+
+    // 見逃し率のメインチャート系列は辛子(系列2)だが、スパークラインは全タイル藍で統一する
+    const missRateLines = screen.getAllByTestId("line-miss_rate");
+    expect(
+      missRateLines.some((el) => el.getAttribute("data-stroke") === CHART_SERIES_1_COLOR),
+    ).toBe(true);
+  });
+
+  it("KPIタイルは閾値(%)とrate(0-1)のスケールを揃えた残りpt・状態チップを表示する", async () => {
+    (api.fetchSummary as Mock).mockResolvedValue({
+      throughput: 14,
+      ng_rate: 0.1,
+      false_alarm_rate: 0.02,
+      miss_rate: null,
+    });
+    (api.fetchThresholdOverlay as Mock).mockImplementation(
+      async (params: { metric: string }) => {
+        if (params.metric === "ng_rate") return [{ jst_date: "2026-07-01", value_pct: 50 }];
+        if (params.metric === "false_alarm_rate") return [{ jst_date: "2026-07-01", value_pct: 1 }];
+        return [];
+      },
+    );
+
+    renderWithClient(<Dashboard />);
+    await screen.findByRole("option", { name: "1" });
+
+    fireEvent.change(screen.getByLabelText("開始日"), { target: { value: "2026-07-01" } });
+    fireEvent.change(screen.getByLabelText("終了日"), { target: { value: "2026-07-03" } });
+    fireEvent.change(screen.getByLabelText("色番号"), { target: { value: "501" } });
+    fireEvent.change(screen.getByLabelText("サイズ"), { target: { value: "05" } });
+    fireEvent.change(screen.getByLabelText("チェーン"), { target: { value: "CZT8" } });
+    fireEvent.click(screen.getByRole("button", { name: "適用" }));
+
+    // NG率: 閾値50% - rate10% = 残り40.0pt・正常
+    expect(await screen.findByText("閾値まで残り40.0pt")).toBeInTheDocument();
+    expect(screen.getByText("正常")).toBeInTheDocument();
+    // 虚報率: 閾値1% - rate2% = 残り-1.0pt・逸脱
+    expect(screen.getByText("閾値まで残り-1.0pt")).toBeInTheDocument();
+    expect(screen.getByText("逸脱")).toBeInTheDocument();
+    // 見逃し率: 閾値未取得のため残りpt・状態チップは表示しない
+    expect(screen.queryByText(/見逃し率.*閾値まで残り/)).not.toBeInTheDocument();
+  });
+
+  it("期間セグメントを選ぶと開始日・終了日が自動設定される（ローカル日付・UTC変換しない）", async () => {
+    renderWithClient(<Dashboard />);
+    await screen.findByRole("option", { name: "1" });
+
+    fireEvent.click(screen.getByRole("tab", { name: "7日" }));
+
+    const dateFrom = screen.getByLabelText<HTMLInputElement>("開始日").value;
+    const dateTo = screen.getByLabelText<HTMLInputElement>("終了日").value;
+    expect(dateFrom).not.toBe("");
+    expect(dateTo).not.toBe("");
+    const diffDays =
+      (new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / (1000 * 60 * 60 * 24);
+    expect(diffDays).toBe(6);
+
+    // toISOString（UTC変換）を使うと実行時刻・タイムゾーンによって日付がずれる。
+    // ローカルの年月日から直接組み立てた文字列と一致することを確認する。
+    const now = new Date();
+    const expectedTo = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+      now.getDate(),
+    ).padStart(2, "0")}`;
+    expect(dateTo).toBe(expectedTo);
   });
 
   it("色・サイズ・チェーンが一意に定まる場合、NG率/虚報率/見逃し率それぞれの閾値を取得する", async () => {
