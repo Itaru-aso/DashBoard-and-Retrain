@@ -101,12 +101,15 @@
     追加を検討する。
   - Refs: R4 ／ commit: `feat(ui-redesign): restyle dashboard page`
 
-- [ ] **6. タスクページの再構成**
+- [x] **6. タスクページの再構成**
   - `frontend/src/pages/TaskList.tsx` を design.md §6.2 に合わせて再構成
     （状態 SegmentedControl（未着手/対応中/完了）→ テーブル（StatusChip・行アクション））。
     状態遷移・コメント追記の操作ロジックは無変更。
-  - テスト（`TaskList.test.tsx`）: 既存テストを維持。SegmentedControl・StatusChip の描画を追加検証。
-  - 代替検証: `npm run dev` で目視確認。
+  - テスト（`TaskList.test.tsx`）: 既存テストを維持。SegmentedControl・StatusChip の描画を追加検証
+    （対応中・完了チップの日本語ラベル表示も個別に検証）。
+  - 代替検証: `npm run dev` で目視確認。問題なし。
+  - 実装時の変更（design.md §6.2 に追記済み）: SegmentedControl に「すべて」を追加
+    （既存のフィルタ解除操作を維持）／状態→StatusChip variant 対応は実装時に決定。
   - Refs: R4 ／ commit: `feat(ui-redesign): restyle task page`
 
 - [ ] **7. 閾値ページの再構成**

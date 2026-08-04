@@ -31,6 +31,9 @@ const TASK = {
   updated_at: "2026-07-01T00:00:00Z",
 };
 
+const TASK_IN_PROGRESS = { ...TASK, id: 8, status: "IN_PROGRESS" };
+const TASK_DONE = { ...TASK, id: 9, status: "DONE" };
+
 describe("TaskList", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -39,10 +42,28 @@ describe("TaskList", () => {
     (api.addComment as Mock).mockResolvedValue(TASK);
   });
 
-  it("一覧を表示する", async () => {
+  it("一覧を表示する（状態は日本語ラベルのStatusChipで表示）", async () => {
     renderWithClient(<TaskList />);
     expect(await screen.findByText("ng_rate")).toBeInTheDocument();
-    expect(screen.getByRole("cell", { name: "OPEN" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "未着手" })).toBeInTheDocument();
+  });
+
+  it("対応中・完了のStatusChipも日本語ラベルで表示する", async () => {
+    (api.listTasks as Mock).mockResolvedValue([TASK_IN_PROGRESS, TASK_DONE]);
+    renderWithClient(<TaskList />);
+    expect(await screen.findByRole("cell", { name: "対応中" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "完了" })).toBeInTheDocument();
+  });
+
+  it("状態セグメントで「すべて/未着手/対応中/完了」を切り替えられる", async () => {
+    renderWithClient(<TaskList />);
+    await screen.findByText("ng_rate");
+
+    fireEvent.click(screen.getByRole("tab", { name: "対応中" }));
+    await waitFor(() => expect(api.listTasks).toHaveBeenCalledWith({ status: "IN_PROGRESS" }));
+
+    fireEvent.click(screen.getByRole("tab", { name: "すべて" }));
+    await waitFor(() => expect(api.listTasks).toHaveBeenCalledWith({}));
   });
 
   it("進めるで状態遷移 API を呼ぶ", async () => {

@@ -1,5 +1,10 @@
 import { useState } from "react";
 
+import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Panel } from "@/components/ui/Panel";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { StatusChip, type StatusVariant } from "@/components/ui/StatusChip";
 import type { Task } from "@/api/taskApi";
 import { useAddComment, useTasks, useTransitionStatus } from "@/hooks/useTasks";
 
@@ -11,11 +16,25 @@ const NEXT_STATUS: Record<string, string | null> = {
   DONE: null,
 };
 
+const STATUS_META: Record<string, { label: string; variant: StatusVariant }> = {
+  OPEN: { label: "未着手", variant: "neutral" },
+  IN_PROGRESS: { label: "対応中", variant: "warn" },
+  DONE: { label: "完了", variant: "ok" },
+};
+
+const STATUS_FILTER_OPTIONS = [
+  { value: "", label: "すべて" },
+  { value: "OPEN", label: "未着手" },
+  { value: "IN_PROGRESS", label: "対応中" },
+  { value: "DONE", label: "完了" },
+];
+
 function TaskRow({ task }: { task: Task }) {
   const transition = useTransitionStatus();
   const addComment = useAddComment();
   const [comment, setComment] = useState("");
   const next = NEXT_STATUS[task.status];
+  const statusMeta = STATUS_META[task.status];
 
   return (
     <tr>
@@ -29,12 +48,21 @@ function TaskRow({ task }: { task: Task }) {
         <span className={styles.detected}>{task.detected_value ?? "—"}</span>{" "}
         <span className={styles.threshold}>/ {task.threshold_value ?? "—"}</span>
       </td>
-      <td>{task.status}</td>
+      <td>
+        {statusMeta ? (
+          <StatusChip variant={statusMeta.variant}>{statusMeta.label}</StatusChip>
+        ) : (
+          task.status
+        )}
+      </td>
       <td>
         {next && (
-          <button type="button" className={styles.actionButton} onClick={() => transition.mutate({ id: task.id, status: next })}>
+          <Button
+            variant="secondary"
+            onClick={() => transition.mutate({ id: task.id, status: next })}
+          >
             進める
-          </button>
+          </Button>
         )}
       </td>
       <td>
@@ -44,9 +72,8 @@ function TaskRow({ task }: { task: Task }) {
             value={comment}
             onChange={(e) => setComment(e.target.value)}
           />
-          <button
-            type="button"
-            className={styles.actionButton}
+          <Button
+            variant="secondary"
             onClick={() => {
               if (comment) {
                 addComment.mutate({ id: task.id, body: comment });
@@ -55,7 +82,7 @@ function TaskRow({ task }: { task: Task }) {
             }}
           >
             コメント追加
-          </button>
+          </Button>
         </div>
       </td>
     </tr>
@@ -70,44 +97,43 @@ export default function TaskList() {
 
   return (
     <section>
-      <h1>保守タスク</h1>
+      <PageHeader title="保守タスク" />
 
-      <div className={styles.filterBar}>
-        <label htmlFor="status-filter">状態フィルタ</label>
-        <select id="status-filter" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">すべて</option>
-          <option value="OPEN">OPEN</option>
-          <option value="IN_PROGRESS">IN_PROGRESS</option>
-          <option value="DONE">DONE</option>
-        </select>
-      </div>
+      <Panel>
+        <div className={styles.filterBar}>
+          <span className={styles.filterBarLabel}>状態フィルタ</span>
+          <SegmentedControl options={STATUS_FILTER_OPTIONS} value={status} onChange={setStatus} />
+        </div>
+      </Panel>
 
       {isLoading ? (
         <p>読み込み中...</p>
       ) : (
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>検査日 (JST)</th>
-                <th>種別</th>
-                <th>サイズ</th>
-                <th>チェーン</th>
-                <th>テープ</th>
-                <th>色番</th>
-                <th>検知値 / 閾値</th>
-                <th>ステータス</th>
-                <th>操作</th>
-                <th>コメント</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.map((t) => (
-                <TaskRow key={t.id} task={t} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Panel>
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>検査日 (JST)</th>
+                  <th>種別</th>
+                  <th>サイズ</th>
+                  <th>チェーン</th>
+                  <th>テープ</th>
+                  <th>色番</th>
+                  <th>検知値 / 閾値</th>
+                  <th>ステータス</th>
+                  <th>操作</th>
+                  <th>コメント</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.map((t) => (
+                  <TaskRow key={t.id} task={t} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
       )}
     </section>
   );
