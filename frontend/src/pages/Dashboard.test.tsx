@@ -5,19 +5,35 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 
 import * as api from "@/api/dashboardApi";
+import {
+  CHART_SERIES_1_COLOR,
+  CHART_SERIES_2_COLOR,
+  CHART_THRESHOLD_COLOR,
+  CHART_THRESHOLD_DASH,
+} from "@/styles/chartTheme";
 
 import Dashboard from "./Dashboard";
 
 vi.mock("@/api/dashboardApi");
 
 // recharts / react-window は jsdom で扱いにくいため軽量スタブに置換する。
+// Line/Bar は stroke/fill/strokeDasharray を data-* 属性に写し、配色の検証に使う。
 vi.mock("recharts", () => {
   const Passthrough = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
   return {
     LineChart: Passthrough,
     BarChart: Passthrough,
-    Line: () => null,
-    Bar: () => null,
+    Line: (props: { dataKey: string; stroke?: string; strokeDasharray?: string }) => (
+      <div
+        data-testid={`line-${props.dataKey}`}
+        data-stroke={props.stroke}
+        data-dash={props.strokeDasharray}
+      />
+    ),
+    Bar: (props: { dataKey: string; fill?: string }) => (
+      <div data-testid={`bar-${props.dataKey}`} data-fill={props.fill} />
+    ),
+    Legend: () => <div data-testid="legend" />,
     XAxis: () => null,
     YAxis: () => null,
     CartesianGrid: () => null,
@@ -99,6 +115,42 @@ describe("Dashboard", () => {
     const call = (api.fetchSummary as Mock).mock.calls[0][0];
     expect(call.from).toBe("2026-07-01");
     expect(call.to).toBe("2026-07-03");
+  });
+
+  it("チャート配色はdesign.md §7のchartTheme定数に従う（単系列の閾値は赤・2系列は系列色）", () => {
+    renderWithClient(<Dashboard />);
+
+    expect(screen.getByTestId("bar-throughput")).toHaveAttribute("data-fill", CHART_SERIES_1_COLOR);
+
+    expect(screen.getByTestId("line-ng_rate")).toHaveAttribute("data-stroke", CHART_SERIES_1_COLOR);
+    expect(screen.getByTestId("line-threshold")).toHaveAttribute(
+      "data-stroke",
+      CHART_THRESHOLD_COLOR,
+    );
+    expect(screen.getByTestId("line-threshold")).toHaveAttribute(
+      "data-dash",
+      CHART_THRESHOLD_DASH,
+    );
+
+    expect(screen.getByTestId("line-false_alarm_rate")).toHaveAttribute(
+      "data-stroke",
+      CHART_SERIES_1_COLOR,
+    );
+    expect(screen.getByTestId("line-miss_rate")).toHaveAttribute(
+      "data-stroke",
+      CHART_SERIES_2_COLOR,
+    );
+    expect(screen.getByTestId("line-fa_threshold")).toHaveAttribute(
+      "data-stroke",
+      CHART_SERIES_1_COLOR,
+    );
+    expect(screen.getByTestId("line-miss_threshold")).toHaveAttribute(
+      "data-stroke",
+      CHART_SERIES_2_COLOR,
+    );
+
+    // 凡例は2系列以上のチャート（虚報率・見逃し率）にのみ表示する
+    expect(screen.getAllByTestId("legend")).toHaveLength(1);
   });
 
   it("色・サイズ・チェーンが一意に定まる場合、NG率/虚報率/見逃し率それぞれの閾値を取得する", async () => {

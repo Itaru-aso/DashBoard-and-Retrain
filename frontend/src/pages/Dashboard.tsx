@@ -3,6 +3,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Legend,
   Line,
   LineChart,
   Tooltip,
@@ -19,6 +20,18 @@ import {
   useThresholdOverlay,
   useTrends,
 } from "@/hooks/useDashboard";
+import {
+  CHART_AXIS_LINE_COLOR,
+  CHART_BAR_RADIUS,
+  CHART_GRID_COLOR,
+  CHART_LINE_WIDTH,
+  CHART_SERIES_1_COLOR,
+  CHART_SERIES_2_COLOR,
+  CHART_THRESHOLD_COLOR,
+  CHART_THRESHOLD_DASH,
+  chartAxisTickStyle,
+  chartTooltipContentStyle,
+} from "@/styles/chartTheme";
 
 import styles from "./Dashboard.module.css";
 import { buildChartSeries, buildFaMissChartSeries } from "./dashboardChart";
@@ -179,11 +192,11 @@ export default function Dashboard() {
           <span className={styles.panelTitle}>検査数（スループット）</span>
           <span className={styles.panelSubtitle}>日別 検査数</span>
           <BarChart width={480} height={260} data={throughputChartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="throughput" fill="#22d3ee" />
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_COLOR} />
+            <XAxis dataKey="date" tick={chartAxisTickStyle} axisLine={{ stroke: CHART_AXIS_LINE_COLOR }} />
+            <YAxis tick={chartAxisTickStyle} axisLine={{ stroke: CHART_AXIS_LINE_COLOR }} />
+            <Tooltip contentStyle={chartTooltipContentStyle} />
+            <Bar dataKey="throughput" fill={CHART_SERIES_1_COLOR} radius={CHART_BAR_RADIUS} />
           </BarChart>
         </div>
 
@@ -191,13 +204,27 @@ export default function Dashboard() {
           <span className={styles.panelTitle}>NG率推移</span>
           <span className={styles.panelSubtitle}>日別 NG率・閾値</span>
           <LineChart width={480} height={260} data={ngChartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis />
-            <Tooltip />
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_COLOR} />
+            <XAxis dataKey="date" tick={chartAxisTickStyle} axisLine={{ stroke: CHART_AXIS_LINE_COLOR }} />
+            <YAxis tick={chartAxisTickStyle} axisLine={{ stroke: CHART_AXIS_LINE_COLOR }} />
+            <Tooltip contentStyle={chartTooltipContentStyle} />
             {/* KPI が NULL の点は欠損として扱い線をつながない */}
-            <Line type="monotone" dataKey="ng_rate" stroke="#22d3ee" connectNulls={false} />
-            <Line type="stepAfter" dataKey="threshold" stroke="#fb7185" connectNulls={false} />
+            <Line
+              type="monotone"
+              dataKey="ng_rate"
+              stroke={CHART_SERIES_1_COLOR}
+              strokeWidth={CHART_LINE_WIDTH}
+              connectNulls={false}
+            />
+            {/* 系列が1本のチャートなので閾値は赤固定（design.md §7） */}
+            <Line
+              type="stepAfter"
+              dataKey="threshold"
+              stroke={CHART_THRESHOLD_COLOR}
+              strokeWidth={CHART_LINE_WIDTH}
+              strokeDasharray={CHART_THRESHOLD_DASH}
+              connectNulls={false}
+            />
           </LineChart>
         </div>
       </div>
@@ -206,18 +233,44 @@ export default function Dashboard() {
         <span className={styles.panelTitle}>虚報率・見逃し率</span>
         <span className={styles.panelSubtitle}>各系列に閾値ライン（破線）を重畳</span>
         <LineChart width={980} height={270} data={faMissChartData}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="date" />
-          <YAxis />
-          <Tooltip />
-          <Line type="monotone" dataKey="false_alarm_rate" stroke="#22d3ee" connectNulls={false} />
-          <Line type="monotone" dataKey="miss_rate" stroke="#a78bfa" connectNulls={false} />
-          <Line type="stepAfter" dataKey="fa_threshold" stroke="#22d3ee" strokeDasharray="4 4" connectNulls={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_COLOR} />
+          <XAxis dataKey="date" tick={chartAxisTickStyle} axisLine={{ stroke: CHART_AXIS_LINE_COLOR }} />
+          <YAxis tick={chartAxisTickStyle} axisLine={{ stroke: CHART_AXIS_LINE_COLOR }} />
+          <Tooltip contentStyle={chartTooltipContentStyle} />
+          <Legend />
+          <Line
+            type="monotone"
+            dataKey="false_alarm_rate"
+            name="虚報率"
+            stroke={CHART_SERIES_1_COLOR}
+            strokeWidth={CHART_LINE_WIDTH}
+            connectNulls={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="miss_rate"
+            name="見逃し率"
+            stroke={CHART_SERIES_2_COLOR}
+            strokeWidth={CHART_LINE_WIDTH}
+            connectNulls={false}
+          />
+          {/* 閾値は対応する系列と同色（design.md §7） */}
+          <Line
+            type="stepAfter"
+            dataKey="fa_threshold"
+            name="虚報率 閾値"
+            stroke={CHART_SERIES_1_COLOR}
+            strokeWidth={CHART_LINE_WIDTH}
+            strokeDasharray={CHART_THRESHOLD_DASH}
+            connectNulls={false}
+          />
           <Line
             type="stepAfter"
             dataKey="miss_threshold"
-            stroke="#a78bfa"
-            strokeDasharray="4 4"
+            name="見逃し率 閾値"
+            stroke={CHART_SERIES_2_COLOR}
+            strokeWidth={CHART_LINE_WIDTH}
+            strokeDasharray={CHART_THRESHOLD_DASH}
             connectNulls={false}
           />
         </LineChart>

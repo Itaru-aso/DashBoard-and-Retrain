@@ -62,19 +62,30 @@
     class名変更で落ちる場合のみ表示仕様の追随修正とする（R7.3）。
   - Refs: R3 ／ commit: `feat(ui-redesign): restyle shared header and sidebar`
 
-- [ ] **4. チャート共通仕様（`chartTheme.ts`）**
+- [x] **4. チャート共通仕様（`chartTheme.ts`）**
   - `frontend/src/styles/chartTheme.ts` を新設し、グリッド線・軸/目盛文字・線幅・マーカー・
-    閾値線（`ReferenceLine` 破線 `6 4`・対応系列と同色）・ツールチップ様式の定数をエクスポート。
-  - 既存の recharts 利用箇所（ダッシュボード等）を `chartTheme.ts` の定数を使うよう更新。
-    新規チャートライブラリは追加しない。
+    閾値線（破線 `6 4`・対応系列と同色）・ツールチップ様式の定数をエクスポート。
+    色は SVG プレゼンテーション属性（recharts の stroke/fill）が Chromium で `var()` を
+    解決しないため、`tokens.css` の値をリテラル hex で複製（design.md §7 追記参照）。
+    閾値は `ReferenceLine` ではなく既存の `Line type="stepAfter"` を維持（日次で変化・
+    欠損しうる閾値は定数y値の `ReferenceLine` では表現できないため。design.md §7 追記）。
+  - 既存の recharts 利用箇所（ダッシュボード）を `chartTheme.ts` の定数を使うよう更新。
+    2系列チャート（虚報率・見逃し率）に `Legend` を追加。新規チャートライブラリは追加しない。
   - テスト（Vitest + Testing Library）: 既存チャートテストを維持しつつ、閾値線の色が
-    対応系列と一致すること（NG率のような単系列チャートは赤）を検証。
+    対応系列と一致すること（NG率のような単系列チャートは赤）を検証（recharts モックに
+    stroke/fill/strokeDasharray を data-* 属性として写し、実際の DOM 属性値で検証）。
+  - 代替検証: `npm run dev` で実データ表示時にバー/線の配色が意図通りであることを目視確認
+    （SVGプレゼンテーション属性はテストで色の解決結果までは検証できないため）。
+  - **後続の申し送り**: `CHART_DOT_RADIUS`/`CHART_DOT_STROKE_COLOR`/`CHART_DOT_STROKE_WIDTH`
+    （最終点マーカー・白縁3.5px）はタスク5で実際のチャート再構成時に使用する（本タスクでは
+    定数のみ定義・未使用）。
   - Refs: R5 ／ commit: `feat(ui-redesign): add shared chart theme utility`
 
 - [ ] **5. ダッシュボードページの再構成**
   - `frontend/src/pages/Dashboard.tsx` を design.md §6.1 に合わせて再構成
     （PageHeader → 期間/号機/色番/サイズのフィルタ行 → KPI4タイル（StatTile・全タイル藍系スパークライン）
     → チャート3面（検査数/NG率2カラム、虚報率・見逃し率全幅）→ 日次明細テーブル）。
+    折れ線の最終点マーカー（`CHART_DOT_RADIUS` 等・タスク4で定義済み）をこのタスクで適用する。
   - フィルタ・API呼び出し・データ取得ロジックは無変更。共通UI部品（タスク2）・chartTheme（タスク4）を使用。
   - テスト（Vitest + Testing Library）: 既存テストを維持。KPIタイルの状態チップ・スパークライン描画を追加検証。
   - 代替検証: `npm run dev`（バックエンド接続）で実データ表示を目視確認。

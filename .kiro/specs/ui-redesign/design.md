@@ -185,11 +185,20 @@ PageHeader 右端に「閾値を登録」（primary）→ 一覧テーブル（�
 
 - グリッド線 `--chart-grid`・軸/目盛文字 11px `--color-text-secondary`
 - 線幅2px・最終点マーカー（白縁3.5px）・棒は藍単色＋上角丸2px
-- 閾値線 = `ReferenceLine` 破線 `6 4`。**対応する系列と同色**
+- 閾値線 = 破線 `6 4`。**対応する系列と同色**
   （NG率チャートのみ系列が1本なので閾値は赤 `--chart-threshold`）
 - ツールチップ: 生成りカード様式（surface＋border＋radius のインラインスタイル）
 - `connectNulls={false}` 維持（欠損日は線を切る）
 - 凡例は2系列以上のチャートのみ表示。値ラベルの常時表示はしない
+
+> **実装時の変更（タスク4）**: 閾値線は `ReferenceLine`（定数y値）ではなく既存の
+> `Line type="stepAfter"` を維持した。閾値は色別／期間別に有効期間を持ち日次で
+> 変化・欠損しうる（dashboard spec R3・`resolve_effective`）ため、`ReferenceLine`
+> では表現できない。見た目（破線6 4・対応系列と同色）のみ本節に合わせた。
+> また `chartTheme.ts` の色定数は `tokens.css` の値を**リテラルhexで複製**する
+> （recharts は stroke/fill をSVGプレゼンテーション属性として設定するため、
+> Chromium系ブラウザで `var(--x)` が解決されない）。`contentStyle` 等の
+> インラインstyle経由の値は `var()` のままでよい。
 
 ## 8. 実装制約
 

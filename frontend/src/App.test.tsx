@@ -17,6 +17,7 @@ vi.mock("recharts", () => {
     BarChart: Passthrough,
     Line: () => null,
     Bar: () => null,
+    Legend: () => null,
     XAxis: () => null,
     YAxis: () => null,
     CartesianGrid: () => null,
