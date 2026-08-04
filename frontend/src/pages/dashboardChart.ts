@@ -1,5 +1,10 @@
 import type { OverlayPoint, TrendPoint } from "@/api/dashboardApi";
 
+// trends API の率（0-1の割合）を、閾値overlayのvalue_pctと同じ%スケールに変換する。
+function toPercent(value: number | null): number | null {
+  return value === null ? null : value * 100;
+}
+
 // recharts に渡す1日ぶんの行。NULL の KPI は null のまま保持し、線をつながない
 // （recharts の connectNulls=false と組み合わせて欠損描画）。
 export interface ChartRow {
@@ -20,9 +25,10 @@ export function buildChartSeries(
   for (const t of trends) {
     byDate.set(t.jst_date, {
       date: t.jst_date,
-      ng_rate: t.ng_rate,
-      false_alarm_rate: t.false_alarm_rate,
-      miss_rate: t.miss_rate,
+      // trends API の各率は0-1の割合。閾値overlayのvalue_pctと同じ%スケールに揃える。
+      ng_rate: toPercent(t.ng_rate),
+      false_alarm_rate: toPercent(t.false_alarm_rate),
+      miss_rate: toPercent(t.miss_rate),
       threshold: null,
     });
   }
@@ -70,8 +76,8 @@ export function buildFaMissChartSeries(
 
   for (const t of trends) {
     const row = getRow(t.jst_date);
-    row.false_alarm_rate = t.false_alarm_rate;
-    row.miss_rate = t.miss_rate;
+    row.false_alarm_rate = toPercent(t.false_alarm_rate);
+    row.miss_rate = toPercent(t.miss_rate);
   }
   for (const o of faOverlay) {
     getRow(o.jst_date).fa_threshold = o.value_pct;
