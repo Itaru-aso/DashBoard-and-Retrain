@@ -30,6 +30,12 @@ const SAMPLE = {
   updated_at: "2026-01-01T00:00:00Z",
 };
 
+const SAMPLE_DISABLED = {
+  ...SAMPLE,
+  id: 2,
+  valid_to: "2026-02-01T00:00:00Z",
+};
+
 describe("ThresholdManagement", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -39,6 +45,23 @@ describe("ThresholdManagement", () => {
     (api.listThresholds as Mock).mockResolvedValue([SAMPLE]);
     renderWithClient(<ThresholdManagement />);
     expect(await screen.findByText("ng_rate")).toBeInTheDocument();
+  });
+
+  it("valid_toの有無で有効/無効のStatusChipを表示する", async () => {
+    (api.listThresholds as Mock).mockResolvedValue([SAMPLE, SAMPLE_DISABLED]);
+    renderWithClient(<ThresholdManagement />);
+    expect(await screen.findByRole("cell", { name: "有効" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "無効" })).toBeInTheDocument();
+  });
+
+  it("PageHeaderの「閾値を登録」ボタンで登録フォームまでスクロールする", async () => {
+    (api.listThresholds as Mock).mockResolvedValue([SAMPLE]);
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    renderWithClient(<ThresholdManagement />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "閾値を登録" }));
+    expect(scrollIntoView).toHaveBeenCalled();
   });
 
   it("正しい入力で登録 API を呼ぶ", async () => {

@@ -1,35 +1,8 @@
-.infoBanner {
-  padding: 16px 20px;
-  border-radius: 14px;
-  background: rgba(34, 211, 238, 0.06);
-  border: 1px solid rgba(34, 211, 238, 0.16);
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  font-size: var(--font-size-body);
-  color: var(--color-text-secondary);
-  line-height: 1.5;
-  margin-bottom: 16px;
-}
-
-.infoDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--color-accent-cyan);
-  flex: none;
-}
-
-.panel {
-  padding: 16px 18px;
-  border-radius: 14px;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.02));
-  border: 1px solid var(--color-border);
+.form {
   display: flex;
   align-items: flex-end;
-  gap: 16px;
+  gap: var(--space-4);
   flex-wrap: wrap;
-  margin-bottom: 16px;
 }
 
 .field {
@@ -47,13 +20,12 @@
 
 .field select,
 .field input {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   color: var(--color-text-primary);
   padding: 10px 12px;
-  border-radius: 9px;
+  border-radius: var(--radius);
   font-size: var(--font-size-body);
-  color-scheme: dark;
 }
 
 .valueInput {
@@ -63,32 +35,18 @@
   text-align: right;
 }
 
-.submitButton {
-  padding: 11px 24px;
-  border-radius: 9px;
-  background: linear-gradient(120deg, var(--color-accent-cyan), #38bdf8);
-  border: none;
-  color: #04141a;
-  font-size: var(--font-size-body);
-  font-weight: 700;
-  cursor: pointer;
-  font-family: inherit;
-}
-
 .error {
-  color: #fda4af;
-  background: rgba(244, 63, 94, 0.1);
-  border: 1px solid rgba(244, 63, 94, 0.28);
+  color: var(--color-bad);
+  background: var(--color-bad-bg);
+  border: 1px solid var(--color-bad-border);
   padding: 10px 14px;
-  border-radius: 9px;
+  border-radius: var(--radius);
   font-size: var(--font-size-body);
-  margin-bottom: 16px;
+  margin-top: var(--space-3);
 }
 
 .tableWrap {
   overflow-x: auto;
-  border-radius: 10px;
-  border: 1px solid var(--color-border);
 }
 
 .table {
@@ -98,33 +56,22 @@
 
 .table th {
   text-align: left;
-  padding: 11px 14px;
+  padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-caption);
   font-weight: 600;
   color: var(--color-text-secondary);
   letter-spacing: 0.5px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(16, 22, 34, 0.7);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-sunken);
 }
 
 .table td {
-  padding: 10px 14px;
+  padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-body);
   color: var(--color-text-secondary);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .mono {
   font-family: var(--font-mono);
-}
-
-.disableButton {
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--color-text-secondary);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  font-size: var(--font-size-caption);
-  cursor: pointer;
-  font-family: inherit;
 }

@@ -112,11 +112,15 @@
     （既存のフィルタ解除操作を維持）／状態→StatusChip variant 対応は実装時に決定。
   - Refs: R4 ／ commit: `feat(ui-redesign): restyle task page`
 
-- [ ] **7. 閾値ページの再構成**
+- [x] **7. 閾値ページの再構成**
   - `frontend/src/pages/ThresholdManagement.tsx` を design.md §6.3 に合わせて再構成
     （PageHeader 右端に「閾値を登録」primary Button → 一覧テーブル（有効/無効チップ・無効化アクション））。
-  - テスト（`ThresholdManagement.test.tsx`）: 既存テストを維持。Button/StatusChip の描画を追加検証。
-  - 代替検証: `npm run dev` で目視確認。
+  - テスト（`ThresholdManagement.test.tsx`）: 既存テストを維持。Button/StatusChip の描画を追加検証
+    （有効/無効チップ・登録ボタンのスクロール誘導）。
+  - 代替検証: `npm run dev` で目視確認。問題なし。
+  - 実装時の変更（design.md §6.3 に追記済み）: 登録フォームは常時表示Panelのまま維持し、
+    「閾値を登録」primary Buttonはフォームへのスクロール誘導として実装（既存の即時表示フローを維持）。
+    有効/無効チップは `valid_to === null` の有無から導出（新規APIなし）。
   - Refs: R4 ／ commit: `feat(ui-redesign): restyle threshold page`
 
 - [ ] **8. 色マスターページの再構成**
