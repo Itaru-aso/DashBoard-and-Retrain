@@ -121,15 +121,21 @@ monochro:
     color_jitter_brightness: 0.1
     color_jitter_contrast: 0.1
     color_jitter_saturation: 0.0
-    # 撮像環境ドリフト頑強性 (sharpen/blur、monochro専用・colorは未設定=無効のまま)。
-    # 較正実測 (2026-08-05): sharpen factor1.5→シャープネス1.62x (新標準P環境=1.47xをカバー)、
-    # blur sigma0.5→0.51x (ボケ側観測170-290をカバー)。
+    # 撮像環境ドリフト頑強性 (sharpen、monochro専用・colorは未設定=無効のまま)。
+    # フル長5構成の比較検証で確定した値 (2026-08-06)。567でFP 84.5%→32.5%、
+    # 分離マージン 1.120→1.514、181では不良検知率 60%→80% と感度も改善。
     # @.kiro/specs/retraining/st-augmentation-sharpness-robustness.md
-    sharpen_p: 0.3
+    sharpen_p: 0.7
     sharpen_factor_min: 1.0
-    sharpen_factor_max: 2.0
-    gaussian_blur_p: 0.3
+    sharpen_factor_max: 4.0
+    # blur は無効。単独では有効だが強sharpenと負に干渉することを実測
+    # (C3: 分離マージン 1.514→1.128、FPも悪化)。劣化方向 (暗く・ボケる) への
+    # 備えは保守後の撮像系ヘルスチェック (運用) で担保する。
+    gaussian_blur_p: 0.0
     gaussian_blur_sigma_max: 0.6
+    # brightness/contrast は 0.1 のまま拡張しない。0.3 へ広げると FP は劇的に下がるが
+    # (1.7〜6.3%)、欠陥が局所的な輝度異常であるため感度を破壊する
+    # (181実NG 6/10 見逃し・P環境実欠陥も見逃し)。実測に基づく棄却。
   penalty_augmentation:
     grayscale_p: 1.0
     horizontal_flip: true
