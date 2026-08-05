@@ -45,6 +45,22 @@ describe("EdgePc", () => {
     expect(screen.getByText("169.254.93.171")).toBeInTheDocument();
   });
 
+  it("接続状態（未確認/OK/NG）と有効/無効をチップ表示する", async () => {
+    (api.listEdgePcs as Mock).mockResolvedValue([
+      EDGE,
+      { ...EDGE, id: 6, name: "検査PC_2", last_ftp_ok: true, enabled: false },
+      { ...EDGE, id: 7, name: "検査PC_3", last_ftp_ok: false },
+    ]);
+    renderWithClient(<EdgePc />);
+    await screen.findByText("検査PC_1");
+
+    expect(screen.getByRole("cell", { name: "未確認" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "OK" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "NG" })).toBeInTheDocument();
+    expect(screen.getAllByRole("cell", { name: "有効" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("cell", { name: "無効" })).toBeInTheDocument();
+  });
+
   it("登録 API を呼ぶ", async () => {
     renderWithClient(<EdgePc />);
     await screen.findByText("検査PC_1");

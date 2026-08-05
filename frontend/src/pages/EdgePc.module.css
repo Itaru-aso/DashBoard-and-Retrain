@@ -1,13 +1,8 @@
-.panel {
-  padding: 16px 18px;
-  border-radius: 14px;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.02));
-  border: 1px solid var(--color-border);
+.form {
   display: flex;
   align-items: flex-end;
-  gap: 16px;
+  gap: var(--space-4);
   flex-wrap: wrap;
-  margin-bottom: 16px;
 }
 
 .field {
@@ -24,109 +19,72 @@
 }
 
 .field input {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   color: var(--color-text-primary);
   padding: 10px 12px;
-  border-radius: 9px;
+  border-radius: var(--radius);
   font-size: var(--font-size-body);
 }
 
-.submitButton {
-  padding: 11px 24px;
-  border-radius: 9px;
-  background: linear-gradient(120deg, var(--color-accent-cyan), #38bdf8);
-  border: none;
-  color: #04141a;
-  font-size: var(--font-size-body);
-  font-weight: 700;
-  cursor: pointer;
-  font-family: inherit;
+.tableWrap {
+  overflow-x: auto;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+.table {
+  width: 100%;
+  border-collapse: collapse;
 }
 
-.card {
-  padding: 16px 18px;
-  border-radius: 14px;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.02));
-  border: 1px solid var(--color-border);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.cardHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.cardName {
-  font-size: var(--font-size-body);
-  font-weight: 700;
-  color: var(--color-text-primary);
-  letter-spacing: 0.5px;
-}
-
-.badgeEnabled {
-  font-size: var(--font-size-caption);
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: rgba(52, 211, 153, 0.14);
-  color: var(--color-accent-success);
-  border: 1px solid rgba(52, 211, 153, 0.3);
-}
-
-.badgeDisabled {
-  font-size: var(--font-size-caption);
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--color-text-muted);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.ipLabel {
+.table th {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-caption);
   font-weight: 600;
+  color: var(--color-text-secondary);
   letter-spacing: 0.5px;
-  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-sunken);
 }
 
-.ipValue {
-  font-family: var(--font-mono);
-  font-size: var(--font-size-kpi);
-  font-weight: 700;
-  color: var(--color-text-primary);
-  letter-spacing: -0.5px;
+.table td {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-body);
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
-.meta {
+.mono {
   font-family: var(--font-mono);
-  font-size: var(--font-size-caption);
-  color: var(--color-text-secondary);
+}
+
+.connectionCell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.dotOk {
+  background: var(--color-ok);
+}
+
+.dotBad {
+  background: var(--color-bad);
+}
+
+.dotNeutral {
+  background: var(--color-text-muted);
 }
 
 .actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
-  margin-top: 4px;
-}
-
-.actionButton {
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: rgba(34, 211, 238, 0.14);
-  color: #7fe3f3;
-  border: 1px solid rgba(34, 211, 238, 0.25);
-  font-size: var(--font-size-caption);
-  cursor: pointer;
-  font-family: inherit;
 }

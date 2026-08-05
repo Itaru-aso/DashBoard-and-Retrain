@@ -134,11 +134,14 @@
     「取り込み」→「CSV取り込み」に変更（design.md §6.4 の文言に合わせた。動作は無変更）。
   - Refs: R4 ／ commit: `feat(ui-redesign): restyle color master page`
 
-- [ ] **9. エッジPCページの再構成**
+- [x] **9. エッジPCページの再構成**
   - `frontend/src/pages/EdgePc.tsx` を design.md §6.5 に合わせて再構成
     （登録フォーム Panel ＋ 一覧テーブル（接続状態ドット・接続テスト/有効化/削除アクション））。
-  - テスト（`EdgePc.test.tsx`）: 既存テストを維持。接続状態表示の描画を追加検証。
-  - 代替検証: `npm run dev` で目視確認。
+  - テスト（`EdgePc.test.tsx`）: 既存テストを維持。接続状態（未確認/OK/NG）・有効/無効チップの描画を追加検証。
+  - 代替検証: `npm run dev` で目視確認。問題なし。
+  - 実装時の変更（design.md §6.5 に追記済み）: 一覧をカードグリッドからテーブルへ変更
+    （§6.5 が「一覧テーブル」と明記しているため、記載に忠実に合わせた）。
+    削除ボタンは破壊的操作のため `variant="danger"` を採用（§6.5 に明記なし・実装時の判断）。
   - Refs: R4 ／ commit: `feat(ui-redesign): restyle edge pc page`
 
 - [ ] **10. AI学習（再学習）ページの再構成**

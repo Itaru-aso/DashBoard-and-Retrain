@@ -1,6 +1,10 @@
 import { useState } from "react";
 
 import type { EdgePc as EdgePcModel } from "@/api/edgePcApi";
+import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Panel } from "@/components/ui/Panel";
+import { StatusChip } from "@/components/ui/StatusChip";
 import {
   useCheckFtp,
   useCreateEdgePc,
@@ -16,40 +20,49 @@ function ftpLabel(edge: EdgePcModel): string {
   return edge.last_ftp_ok ? "OK" : "NG";
 }
 
-function EdgeCard({ edge }: { edge: EdgePcModel }) {
+function ftpDotClass(edge: EdgePcModel): string {
+  if (edge.last_ftp_ok === null) return styles.dotNeutral;
+  return edge.last_ftp_ok ? styles.dotOk : styles.dotBad;
+}
+
+function EdgeRow({ edge }: { edge: EdgePcModel }) {
   const update = useUpdateEdgePc();
   const remove = useDeleteEdgePc();
   const check = useCheckFtp();
 
   return (
-    <div className={styles.card}>
-      <div className={styles.cardHeader}>
-        <span className={styles.cardName}>{edge.name}</span>
-        <span className={edge.enabled ? styles.badgeEnabled : styles.badgeDisabled}>
-          {edge.enabled ? "有効" : "無効"}
+    <tr>
+      <td>{edge.name}</td>
+      <td className={styles.mono}>{edge.host}</td>
+      <td className={styles.mono}>{edge.model_port ?? "—"}</td>
+      <td>
+        <span className={styles.connectionCell}>
+          <span className={`${styles.dot} ${ftpDotClass(edge)}`} />
+          {ftpLabel(edge)}
         </span>
-      </div>
-      <span className={styles.ipLabel}>IPアドレス</span>
-      <span className={styles.ipValue}>{edge.host}</span>
-      <span className={styles.meta}>
-        ポート {edge.model_port ?? "—"} ／ FTP {ftpLabel(edge)}
-      </span>
-      <div className={styles.actions}>
-        <button
-          type="button"
-          className={styles.actionButton}
-          onClick={() => update.mutate({ id: edge.id, payload: { enabled: !edge.enabled } })}
-        >
-          {edge.enabled ? "無効化" : "有効化"}
-        </button>
-        <button type="button" className={styles.actionButton} onClick={() => check.mutate(edge.id)}>
-          接続テスト
-        </button>
-        <button type="button" className={styles.actionButton} onClick={() => remove.mutate(edge.id)}>
-          削除
-        </button>
-      </div>
-    </div>
+      </td>
+      <td>
+        <StatusChip variant={edge.enabled ? "ok" : "neutral"}>
+          {edge.enabled ? "有効" : "無効"}
+        </StatusChip>
+      </td>
+      <td>
+        <div className={styles.actions}>
+          <Button variant="secondary" onClick={() => check.mutate(edge.id)}>
+            接続テスト
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => update.mutate({ id: edge.id, payload: { enabled: !edge.enabled } })}
+          >
+            {edge.enabled ? "無効化" : "有効化"}
+          </Button>
+          <Button variant="danger" onClick={() => remove.mutate(edge.id)}>
+            削除
+          </Button>
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -85,56 +98,72 @@ export default function EdgePc() {
 
   return (
     <section>
-      <h1>エッジPC管理</h1>
+      <PageHeader title="エッジPC管理" />
 
-      <div className={styles.panel}>
-        <div className={styles.field}>
-          <label htmlFor="edge-name">名称</label>
-          <input id="edge-name" value={name} onChange={(e) => setName(e.target.value)} />
+      <Panel title="エッジPCを登録">
+        <div className={styles.form}>
+          <div className={styles.field}>
+            <label htmlFor="edge-name">名称</label>
+            <input id="edge-name" value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className={styles.field}>
+            <label htmlFor="edge-host">ホスト</label>
+            <input id="edge-host" value={host} onChange={(e) => setHost(e.target.value)} />
+          </div>
+          <div className={styles.field}>
+            <label htmlFor="edge-port">ポート</label>
+            <input
+              id="edge-port"
+              type="number"
+              value={port}
+              onChange={(e) => setPort(e.target.value)}
+            />
+          </div>
+          <div className={styles.field}>
+            <label htmlFor="edge-username">ユーザー名</label>
+            <input
+              id="edge-username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+          </div>
+          <div className={styles.field}>
+            <label htmlFor="edge-password">パスワード</label>
+            <input
+              id="edge-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          <Button onClick={submit}>登録</Button>
         </div>
-        <div className={styles.field}>
-          <label htmlFor="edge-host">ホスト</label>
-          <input id="edge-host" value={host} onChange={(e) => setHost(e.target.value)} />
-        </div>
-        <div className={styles.field}>
-          <label htmlFor="edge-port">ポート</label>
-          <input
-            id="edge-port"
-            type="number"
-            value={port}
-            onChange={(e) => setPort(e.target.value)}
-          />
-        </div>
-        <div className={styles.field}>
-          <label htmlFor="edge-username">ユーザー名</label>
-          <input
-            id="edge-username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
-        </div>
-        <div className={styles.field}>
-          <label htmlFor="edge-password">パスワード</label>
-          <input
-            id="edge-password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-        <button type="button" className={styles.submitButton} onClick={submit}>
-          登録
-        </button>
-      </div>
+      </Panel>
 
       {isLoading ? (
         <p>読み込み中...</p>
       ) : (
-        <div className={styles.grid}>
-          {edges.map((e) => (
-            <EdgeCard key={e.id} edge={e} />
-          ))}
-        </div>
+        <Panel>
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>名称</th>
+                  <th>ホスト</th>
+                  <th>ポート</th>
+                  <th>接続状態</th>
+                  <th>状態</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {edges.map((e) => (
+                  <EdgeRow key={e.id} edge={e} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
       )}
     </section>
   );
