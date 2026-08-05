@@ -263,6 +263,34 @@ describe("Retraining 画面", () => {
     await waitFor(() => expect(bar).toHaveAttribute("aria-valuenow", "50"));
   });
 
+  it("学習ログコンソールは濃藍地（logBoxクラス）で表示される", async () => {
+    mocked.listJobs.mockResolvedValue({
+      items: [job({ id: 20, status: "RUNNING" })],
+      limit: 50,
+      offset: 0,
+    });
+    render(<Retraining />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "進捗" }));
+    const log = await screen.findByLabelText("学習ログ");
+    expect(log.className).toMatch(/logBox/);
+  });
+
+  it("工程ステッパーが4工程（バックアップ/学習/モデル出力・評価/完了）を表示する", async () => {
+    mocked.listJobs.mockResolvedValue({
+      items: [job({ id: 21, status: "RUNNING" })],
+      limit: 50,
+      offset: 0,
+    });
+    render(<Retraining />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "進捗" }));
+    expect(await screen.findByText("バックアップ中")).toBeInTheDocument();
+    expect(screen.getByText("学習中", { selector: "li" })).toBeInTheDocument();
+    expect(screen.getByText("モデル出力・評価中")).toBeInTheDocument();
+    expect(screen.getByText("完了", { selector: "li" })).toBeInTheDocument();
+  });
+
   it("ステージ表示: マーカー行に応じて「現在の処理」ラベルが更新される", async () => {
     mocked.listJobs.mockResolvedValue({
       items: [job({ id: 14, status: "RUNNING" })],

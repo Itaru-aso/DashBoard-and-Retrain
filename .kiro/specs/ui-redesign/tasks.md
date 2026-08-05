@@ -144,13 +144,20 @@
     削除ボタンは破壊的操作のため `variant="danger"` を採用（§6.5 に明記なし・実装時の判断）。
   - Refs: R4 ／ commit: `feat(ui-redesign): restyle edge pc page`
 
-- [ ] **10. AI学習（再学習）ページの再構成**
+- [x] **10. AI学習（再学習）ページの再構成**
   - `frontend/src/pages/Retraining.tsx` を design.md §6.6 に合わせて再構成
     （上段: 起票フォーム Panel ＋ 実行中ジョブカード（工程ステッパー・ライブログ＝
     `--color-indigo-deep` 地インセットコンソール／JetBrains Mono）、下段: ジョブ履歴・配信モデル一覧テーブル）。
     WebSocket ログ取得ロジックは無変更。
-  - テスト（`Retraining.test.tsx`）: 既存テストを維持。ライブログコンソールの配色クラス付与を追加検証。
-  - 代替検証: `npm run dev` で実行中ジョブがあれば目視確認、無ければジョブカードの静的表示を確認。
+  - テスト（`Retraining.test.tsx`）: 既存テストを維持（16 tests・変更なしで全緑）。
+    ライブログコンソールの配色クラス付与・工程ステッパー（4工程）の描画を追加検証。
+  - 代替検証: `npm run dev` で実行中ジョブの工程ステッパー・濃藍コンソールを目視確認。問題なし。
+  - 実装時の変更（design.md §6.6 に追記済み）: 実行中ジョブカードの表示位置を
+    「履歴テーブルの下」から「起票フォームの直下」に変更（§6.6 が「上段: 起票フォーム＋
+    実行中ジョブカード、下段: 履歴・配信モデル」と明記しているため、記載に忠実に合わせた。
+    選択ロジックは無変更）。工程ステッパーは既存の `stage`（Stage型4値）をそのまま可視化。
+    ジョブ状態・配信状態はStatusChipへ変換（QUEUED/CANCELLED=neutral・RUNNING=warn・
+    COMPLETED/SUCCESS=ok・FAILED=bad・PARTIAL=warn。§6.6にvariant指定なし・実装時の判断）。
   - Refs: R4 ／ commit: `feat(ui-redesign): restyle retraining page`
 
 - [ ] **11. 仕上げ: 廃止トークンの削除・フォント再サブセット・一括確認・検証ゲート**

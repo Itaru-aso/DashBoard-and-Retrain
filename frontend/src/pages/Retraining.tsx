@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 
-import { isTerminal, type Job, type JobStatus } from "@/api/retrainingApi";
+import { isTerminal, type DeployStatus, type Job, type JobStatus } from "@/api/retrainingApi";
+import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Panel } from "@/components/ui/Panel";
+import { StatusChip, type StatusVariant } from "@/components/ui/StatusChip";
 import {
   useCancelJob,
   useCreateJob,
@@ -8,7 +12,7 @@ import {
   useJobProgress,
   useJobs,
 } from "@/hooks/useRetraining";
-import { STAGE_LABEL, type Phase, type ProgressState } from "@/pages/retrainingProgress";
+import { STAGE_LABEL, type Phase, type ProgressState, type Stage } from "@/pages/retrainingProgress";
 
 import styles from "./Retraining.module.css";
 
@@ -19,6 +23,44 @@ const STATUS_LABEL: Record<JobStatus, string> = {
   FAILED: "失敗",
   CANCELLED: "キャンセル",
 };
+
+const STATUS_VARIANT: Record<JobStatus, StatusVariant> = {
+  QUEUED: "neutral",
+  RUNNING: "warn",
+  COMPLETED: "ok",
+  FAILED: "bad",
+  CANCELLED: "neutral",
+};
+
+const DEPLOY_STATUS_VARIANT: Record<DeployStatus, StatusVariant> = {
+  SUCCESS: "ok",
+  PARTIAL: "warn",
+  FAILED: "bad",
+};
+
+const STAGE_ORDER: Stage[] = ["backup", "training", "export_eval", "completed"];
+
+function Stepper({ stage }: { stage?: Stage }) {
+  const currentIndex = stage ? STAGE_ORDER.indexOf(stage) : -1;
+  return (
+    <ol className={styles.stepper}>
+      {STAGE_ORDER.map((s, i) => (
+        <li
+          key={s}
+          className={
+            i < currentIndex
+              ? styles.stepDone
+              : i === currentIndex
+                ? styles.stepCurrent
+                : styles.stepPending
+          }
+        >
+          {STAGE_LABEL[s]}
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 function CreateJobForm() {
   const create = useCreateJob();
@@ -47,8 +89,7 @@ function CreateJobForm() {
   };
 
   return (
-    <div className={styles.panel}>
-      <span className={styles.panelTitle}>再学習を起票</span>
+    <Panel title="再学習を起票">
       <div className={styles.formRow}>
         <div className={styles.field}>
           <label htmlFor="rt-color">色番</label>
@@ -70,16 +111,16 @@ function CreateJobForm() {
           <label htmlFor="rt-by">起票者</label>
           <input id="rt-by" value={form.created_by} onChange={update("created_by")} />
         </div>
-        <button type="button" className={styles.submitButton} onClick={submit} disabled={!canSubmit}>
+        <Button onClick={submit} disabled={!canSubmit}>
           {create.isPending ? "起票中…" : "再学習を起票"}
-        </button>
+        </Button>
       </div>
       {create.isError && (
         <p role="alert" className={styles.error}>
           起票できませんでした: {(create.error as Error).message}
         </p>
       )}
-    </div>
+    </Panel>
   );
 }
 
@@ -125,10 +166,8 @@ function ProgressPanel({ job }: { job: Job }) {
   const { lines, importantLines, progress, stage, state } = useJobProgress(job.id, active);
 
   return (
-    <div className={styles.progressCard}>
-      <span className={styles.panelTitle}>
-        進捗 — ジョブ #{job.id}（{job.color_no}/{job.size}/{job.chain}/{job.tape || "—"}）
-      </span>
+    <Panel title={`進捗 — ジョブ #${job.id}（${job.color_no}/${job.size}/${job.chain}/${job.tape || "—"}）`}>
+      <Stepper stage={stage} />
       <div className={styles.statusRow}>
         <span className={styles.pulseDot} />
         <span>
@@ -163,7 +202,7 @@ function ProgressPanel({ job }: { job: Job }) {
           失敗理由: {job.error_message}
         </p>
       )}
-    </div>
+    </Panel>
   );
 }
 
@@ -206,21 +245,22 @@ function JobsTable({
               <td className={styles.mono}>
                 {j.color_no}/{j.size}/{j.chain}/{j.tape || "—"}
               </td>
-              <td>{STATUS_LABEL[j.status]}</td>
+              <td>
+                <StatusChip variant={STATUS_VARIANT[j.status]}>{STATUS_LABEL[j.status]}</StatusChip>
+              </td>
               <td className={styles.mono}>{new Date(j.queued_at).toLocaleString()}</td>
               <td>
-                <button type="button" className={styles.actionButton} onClick={() => onSelect(j.id)}>
+                <Button variant="secondary" onClick={() => onSelect(j.id)}>
                   進捗
-                </button>
+                </Button>
                 {!isTerminal(j.status) && (
-                  <button
-                    type="button"
-                    className={styles.actionButton}
+                  <Button
+                    variant="secondary"
                     onClick={() => cancel.mutate(j.id)}
                     disabled={cancel.isPending}
                   >
                     キャンセル
-                  </button>
+                  </Button>
                 )}
               </td>
             </tr>
@@ -255,7 +295,11 @@ function DeployedTable() {
                 {d.color_no}/{d.size}/{d.chain}/{d.tape || "—"}
               </td>
               <td className={styles.mono}>#{d.job_id}</td>
-              <td>{d.deploy_status}</td>
+              <td>
+                <StatusChip variant={DEPLOY_STATUS_VARIANT[d.deploy_status]}>
+                  {d.deploy_status}
+                </StatusChip>
+              </td>
               <td className={styles.mono}>{new Date(d.deployed_at).toLocaleString()}</td>
             </tr>
           ))}
@@ -276,21 +320,19 @@ export default function Retraining() {
 
   return (
     <section>
-      <h1>モデル再学習</h1>
+      <PageHeader title="モデル再学習" />
 
       <CreateJobForm />
 
-      <section>
-        <h2>履歴</h2>
-        <JobsTable onSelect={setSelectedId} />
-      </section>
-
       {selected && <ProgressPanel job={selected} />}
 
-      <section>
-        <h2>現行配信モデル</h2>
+      <Panel title="履歴">
+        <JobsTable onSelect={setSelectedId} />
+      </Panel>
+
+      <Panel title="現行配信モデル">
         <DeployedTable />
-      </section>
+      </Panel>
     </section>
   );
 }

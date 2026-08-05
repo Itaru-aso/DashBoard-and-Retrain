@@ -212,6 +212,16 @@ PageHeader 右端に「閾値を登録」（primary）→ 一覧テーブル（�
   生成り文字・JetBrains Mono。濃藍面の再登場でシェルとの統一感を作る）
 - 下段: ジョブ履歴テーブル・配信モデル一覧テーブル
 
+> **実装時の変更（タスク10）**:
+> - 実行中ジョブカード（`ProgressPanel`）を起票フォームの直下（履歴テーブルより上）に移動した
+>   （本節が「上段: 起票フォーム＋実行中ジョブカード」と明記しているため。選択ロジックは無変更）。
+> - 工程ステッパーは既存の `Stage` 型4値（backup/training/export_eval/completed）を
+>   そのまま可視化。完了工程=`--color-ok`系・現在工程=`--color-indigo`・未着手=中立、
+>   の3状態で表現（辛子色は使わない。§2.1の単一装飾モチーフ制約を踏まえた配色選定）。
+> - ジョブ履歴・配信モデル一覧の状態列をStatusChip化
+>   （QUEUED/CANCELLED=neutral・RUNNING=warn・COMPLETED/SUCCESS=ok・FAILED=bad・
+>   PARTIAL=warn。本節にvariant指定がないため実装時に決定）。
+
 ## 7. チャート共通仕様（recharts テーマユーティリティを1つ新設）
 
 `frontend/src/styles/chartTheme.ts`（定数のエクスポート）に集約:
