@@ -136,7 +136,12 @@ training/                        # 既存学習パイプライン（pipline.py �
   cu128系（Blackwell対応版、2.7/2.8系目安）へバージョンアップすることを承認済み
   （@.kiro/specs/deployment/production-deployment-design.md）。損失関数・モデル構造・学習ループ・
   DataLoader構築等の学習ロジック本体は対象外・変更不可のまま。バージョンアップ後は monochro/color
-  既存モデルのONNX推論結果をdev（cu121）と比較する回帰確認を必須とする）
+  既存モデルのONNX推論結果をdev（cu121）と比較する回帰確認を必須とする。
+  さらに例外: 撮像環境ドリフト（照明交換・台数展開）への頑強性向上に限り、
+  `training/train/common.py` の `get_st_transform` へ sharpen/blur augmentation オプション
+  （config-gated・既定無効・monochro セクションのみ有効化）を追加することを承認済み
+  （@.kiro/specs/retraining/st-augmentation-sharpness-robustness.md、2026-08-05）。
+  color 側の config は変更せず、損失関数・モデル構造・学習ループは対象外・変更不可のまま）
 - spec と実装が食い違ったとき、**spec を直さずコードを優先**すること
 
 ---
@@ -170,6 +175,7 @@ training/                        # 既存学習パイプライン（pipline.py �
 - requirements / design / tasks を機能ごとに保持（foundation・daily-aggregation・threshold・dashboard・task・color・model-retraining・edge）
 - `@.kiro/specs/deployment/production-deployment-design.md` | 本番（Shisui_trainPC）デプロイ設計（ADR）
 - `@.kiro/specs/ui-redesign/design.md` | UIリデザイン設計（藍染テキスタイル・ADR。フロントのみ・API不変）
+- `@.kiro/specs/retraining/st-augmentation-sharpness-robustness.md` | monochro ST側aug拡張（sharpen/blur・撮像環境ドリフト頑強性・ADR）
 
 ### 資料の正・参照（`docs/reference/`）
 | ファイル | 概要 |

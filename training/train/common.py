@@ -54,8 +54,33 @@ class GaussianNoise:
         return TF.to_pil_image(tensor)
 
 
+class RandomSharpness:
+    """factor を [factor_min, factor_max] の一様乱数で引く鮮明化変換（pickle可能）。
+
+    torchvision 標準の RandomAdjustSharpness は factor 固定のため、
+    連続範囲で良品多様体を広げる目的に合わない。撮像環境ドリフト
+    （照明交換・台数展開でのシャープネス差）への頑強性獲得用
+    (@.kiro/specs/retraining/st-augmentation-sharpness-robustness.md)。
+    """
+    def __init__(self, factor_min=1.0, factor_max=2.0, p=0.5):
+        self.factor_min = factor_min
+        self.factor_max = factor_max
+        self.p = p
+
+    def __call__(self, image):
+        import torchvision.transforms.functional as TF
+        if torch.rand(1).item() >= self.p:
+            return image
+        factor = self.factor_min + (self.factor_max - self.factor_min) * torch.rand(1).item()
+        return TF.adjust_sharpness(image, factor)
+
+
 def get_st_transform(cfg):
-    """ST入力用の軽微なAugmentationを構築する（configで無効化可能）"""
+    """ST入力用の軽微なAugmentationを構築する（configで無効化可能）。
+
+    sharpen/blur は撮像環境ドリフト頑強性用（既定無効・monochro のみ config で有効化。
+    パラメータ較正の実測根拠は ADR 参照）。
+    """
     st_cfg = cfg.get('st_augmentation', None)
     if st_cfg is None or not st_cfg.get('enabled', False):
         return None
@@ -68,6 +93,17 @@ def get_st_transform(cfg):
     if brightness > 0 or contrast > 0 or saturation > 0:
         tf_list.append(transforms.ColorJitter(
             brightness=brightness, contrast=contrast, saturation=saturation))
+    sharpen_p = st_cfg.get('sharpen_p', 0)
+    if sharpen_p > 0:
+        tf_list.append(RandomSharpness(
+            factor_min=st_cfg.get('sharpen_factor_min', 1.0),
+            factor_max=st_cfg.get('sharpen_factor_max', 2.0),
+            p=sharpen_p))
+    blur_p = st_cfg.get('gaussian_blur_p', 0)
+    if blur_p > 0:
+        sigma_max = st_cfg.get('gaussian_blur_sigma_max', 0.6)
+        tf_list.append(transforms.RandomApply(
+            [transforms.GaussianBlur(kernel_size=5, sigma=(0.1, sigma_max))], p=blur_p))
     if not tf_list:
         return None
     return transforms.Compose(tf_list)

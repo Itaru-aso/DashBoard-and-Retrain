@@ -182,6 +182,133 @@ def test_get_st_transform_enabled_returns_compose():
     assert isinstance(result, transforms.Compose)
 
 
+def _flatten_transforms(compose):
+    """Compose 内の transform を再帰的に平坦化してクラス名リストを返す。"""
+    names = []
+    for t in compose.transforms:
+        names.append(type(t).__name__)
+        inner = getattr(t, "transforms", None)
+        if inner is not None:
+            for it in inner:
+                names.append(type(it).__name__)
+    return names
+
+
+def test_get_st_transform_new_keys_absent_keeps_legacy_transforms_only():
+    """新キー未設定（既定）では blur/sharpen が変換列に含まれない（後方互換）。"""
+    from omegaconf import OmegaConf
+
+    from train.common import get_st_transform
+
+    cfg = OmegaConf.create({
+        "st_augmentation": {
+            "enabled": True,
+            "horizontal_flip": True,
+            "color_jitter_brightness": 0.1,
+            "color_jitter_contrast": 0.1,
+            "color_jitter_saturation": 0.0,
+        }
+    })
+    names = _flatten_transforms(get_st_transform(cfg))
+    assert "RandomSharpness" not in names
+    assert "GaussianBlur" not in names
+
+
+def test_get_st_transform_sharpen_enabled_adds_random_sharpness():
+    """sharpen_p>0 で RandomSharpness が変換列に追加される。"""
+    from omegaconf import OmegaConf
+
+    from train.common import get_st_transform
+
+    cfg = OmegaConf.create({
+        "st_augmentation": {
+            "enabled": True,
+            "sharpen_p": 0.3,
+            "sharpen_factor_min": 1.0,
+            "sharpen_factor_max": 2.0,
+        }
+    })
+    names = _flatten_transforms(get_st_transform(cfg))
+    assert "RandomSharpness" in names
+
+
+def test_get_st_transform_blur_enabled_adds_gaussian_blur():
+    """gaussian_blur_p>0 で RandomApply(GaussianBlur) が変換列に追加される。"""
+    from omegaconf import OmegaConf
+
+    from train.common import get_st_transform
+
+    cfg = OmegaConf.create({
+        "st_augmentation": {
+            "enabled": True,
+            "gaussian_blur_p": 0.3,
+            "gaussian_blur_sigma_max": 0.6,
+        }
+    })
+    names = _flatten_transforms(get_st_transform(cfg))
+    assert "RandomApply" in names
+    assert "GaussianBlur" in names
+
+
+def test_random_sharpness_deterministic_apply_increases_sharpness():
+    """RandomSharpness を p=1.0・factor固定で適用するとシャープネスが実際に上がる。"""
+    import cv2
+    from PIL import Image
+
+    from train.common import RandomSharpness
+
+    rng = np.random.RandomState(0)
+    arr = rng.randint(60, 200, size=(64, 128, 3), dtype=np.uint8)
+    img = Image.fromarray(arr)
+
+    def lap_var(pil):
+        gray = np.array(pil.convert("L"), dtype=np.float64)
+        return cv2.Laplacian(gray, cv2.CV_64F).var()
+
+    tf = RandomSharpness(factor_min=2.0, factor_max=2.0, p=1.0)
+    out = tf(img)
+    assert isinstance(out, Image.Image)
+    assert out.size == img.size
+    assert lap_var(out) > lap_var(img) * 1.2
+
+
+def test_random_sharpness_p_zero_is_identity():
+    """p=0 では画像が変換されない。"""
+    from PIL import Image
+
+    from train.common import RandomSharpness
+
+    rng = np.random.RandomState(1)
+    arr = rng.randint(0, 255, size=(32, 32, 3), dtype=np.uint8)
+    img = Image.fromarray(arr)
+    out = RandomSharpness(factor_min=1.0, factor_max=3.0, p=0.0)(img)
+    assert np.array_equal(np.array(out), np.array(img))
+
+
+def test_st_transform_with_new_augs_is_picklable():
+    """Windows multiprocessing 対応: 新変換を含む st_tf が pickle 可能であること。"""
+    import pickle
+
+    from omegaconf import OmegaConf
+
+    from train.common import get_st_transform
+
+    cfg = OmegaConf.create({
+        "st_augmentation": {
+            "enabled": True,
+            "horizontal_flip": True,
+            "color_jitter_brightness": 0.1,
+            "sharpen_p": 0.3,
+            "sharpen_factor_max": 2.0,
+            "gaussian_blur_p": 0.3,
+            "gaussian_blur_sigma_max": 0.6,
+        }
+    })
+    tf = get_st_transform(cfg)
+    restored = pickle.loads(pickle.dumps(tf))
+    assert isinstance(restored, transforms.Compose)
+
+
 def test_train_transform_applies_both_paths():
     from PIL import Image
 

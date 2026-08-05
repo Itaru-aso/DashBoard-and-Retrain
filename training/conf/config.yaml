@@ -121,6 +121,15 @@ monochro:
     color_jitter_brightness: 0.1
     color_jitter_contrast: 0.1
     color_jitter_saturation: 0.0
+    # 撮像環境ドリフト頑強性 (sharpen/blur、monochro専用・colorは未設定=無効のまま)。
+    # 較正実測 (2026-08-05): sharpen factor1.5→シャープネス1.62x (新標準P環境=1.47xをカバー)、
+    # blur sigma0.5→0.51x (ボケ側観測170-290をカバー)。
+    # @.kiro/specs/retraining/st-augmentation-sharpness-robustness.md
+    sharpen_p: 0.3
+    sharpen_factor_min: 1.0
+    sharpen_factor_max: 2.0
+    gaussian_blur_p: 0.3
+    gaussian_blur_sigma_max: 0.6
   penalty_augmentation:
     grayscale_p: 1.0
     horizontal_flip: true
