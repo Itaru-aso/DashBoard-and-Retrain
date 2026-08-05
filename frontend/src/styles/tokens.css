@@ -56,17 +56,6 @@
   --space-3: 12px;
   --space-4: 16px;
   --space-6: 24px;
-
-  /* 未移行ページが参照中（タスク5・9で --color-ok 等へ移行後、値の見直しまたは削除を検討） */
-  --font-size-judgment: 40px;
-  --color-accent-success: #34d399;
-
-  /* 廃止予定トークン（design.md §3）。未移行ページ（タスク3・6・7・9・10）が参照中のため
-     値は変更しない。タスク11で参照ゼロを確認後に削除する。 */
-  --color-panel-header: rgba(9, 14, 24, 0.62);
-  --color-panel-sidebar: rgba(9, 14, 24, 0.42);
-  --color-accent-cyan: #22d3ee;
-  --color-accent-purple: #a78bfa;
 }
 
 body {

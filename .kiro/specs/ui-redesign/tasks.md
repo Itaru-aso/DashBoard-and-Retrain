@@ -160,16 +160,21 @@
     COMPLETED/SUCCESS=ok・FAILED=bad・PARTIAL=warn。§6.6にvariant指定なし・実装時の判断）。
   - Refs: R4 ／ commit: `feat(ui-redesign): restyle retraining page`
 
-- [ ] **11. 仕上げ: 廃止トークンの削除・フォント再サブセット・一括確認・検証ゲート**
+- [x] **11. 仕上げ: 廃止トークンの削除・フォント再サブセット・一括確認・検証ゲート**
   - タスク1で残していた廃止トークン定義（`--color-accent-cyan` / `--color-accent-purple` /
-    `--color-panel-header` / `--color-panel-sidebar` 等）を `tokens.css` から削除。
-  - `grep -rn "accent-cyan\|accent-purple\|panel-header\|panel-sidebar" frontend/src` で
-    参照が残っていないことを確認（R1.2, R8.4）。
+    `--color-panel-header` / `--color-panel-sidebar` / `--font-size-judgment` /
+    `--color-accent-success`）を `tokens.css` から削除。全ページ移行済みのため削除可能と確認。
+  - `grep -rn "accent-cyan\|accent-purple\|panel-header\|panel-sidebar\|font-size-judgment\|accent-success" frontend/src`
+    で参照ゼロを確認（R1.2, R8.4）。
   - `python frontend/scripts/subset_japanese_font.py` を再実行し、全ページの確定文言を
-    反映した最終版フォントサブセットに更新する（タスク1の申し送り）。
-  - `tsc --noEmit`・`eslint .`・`vitest run` をグリーンに。
-  - `npm run dev` で全6ページを通し目視確認し、スクリーンショットを提示（R8.2）。
-  - commit: `chore(ui-redesign): remove deprecated tokens and satisfy verification gate`
+    反映した最終版フォントサブセットに更新（2496 glyphs・タスク5時点と同数。Jōyō漢字の
+    カバレッジ内で新規文言も収まったため）。環境に `brotli` パッケージが無く失敗したため
+    `pip install brotli` を実行（fontTools の woff2 エンコードに必須。開発環境ツールの追加で
+    プロジェクト依存には追加していない）。
+  - `tsc --noEmit`・`eslint .`・`vitest run`（21 files, 116 tests）グリーン。
+  - `npm run dev` で全6ページ（dashboard/tasks/thresholds/colors/edge-pcs/retraining）を
+    通し目視確認。問題なし。
+  - Refs: R1.2, R8.2, R8.4 ／ commit: `chore(ui-redesign): remove deprecated tokens and satisfy verification gate`
 
 ---
 
