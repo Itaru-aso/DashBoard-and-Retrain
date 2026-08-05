@@ -1,11 +1,21 @@
 import { useMemo, useState } from "react";
 
 import type { Color } from "@/api/colorApi";
+import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Panel } from "@/components/ui/Panel";
+import { StatusChip, type StatusVariant } from "@/components/ui/StatusChip";
 import { useColors, useColorSummary, useImportColors, useUpdateSample } from "@/hooks/useColors";
 
 import styles from "./ColorMaster.module.css";
 
 const PAGE_SIZE = 50;
+
+const STATUS_META: Record<string, { variant: StatusVariant }> = {
+  未実施: { variant: "neutral" },
+  量産検証: { variant: "warn" },
+  実生産: { variant: "ok" },
+};
 
 function swatchColor(color: Color): string {
   if (color.rgb_r === null || color.rgb_g === null || color.rgb_b === null) {
@@ -17,12 +27,19 @@ function swatchColor(color: Color): string {
 function ColorRow({ color }: { color: Color }) {
   const update = useUpdateSample();
   const [rgbR, setRgbR] = useState(color.rgb_r ?? 0);
+  const statusMeta = STATUS_META[color.status];
 
   return (
     <tr>
       <td className={styles.mono}>{color.color_no}</td>
       <td className={styles.mono}>{`${color.size}/${color.chain}/${color.tape}`}</td>
-      <td>{color.status}</td>
+      <td>
+        {statusMeta ? (
+          <StatusChip variant={statusMeta.variant}>{color.status}</StatusChip>
+        ) : (
+          color.status
+        )}
+      </td>
       <td>
         <div className={styles.swatchRow}>
           <span className={styles.swatch} style={{ background: swatchColor(color) }} />
@@ -33,13 +50,12 @@ function ColorRow({ color }: { color: Color }) {
             value={rgbR}
             onChange={(e) => setRgbR(Number(e.target.value))}
           />
-          <button
-            type="button"
-            className={styles.actionButton}
+          <Button
+            variant="secondary"
             onClick={() => update.mutate({ id: color.id, payload: { rgb_r: rgbR } })}
           >
             保存
-          </button>
+          </Button>
         </div>
       </td>
     </tr>
@@ -77,116 +93,125 @@ export default function ColorMaster() {
 
   return (
     <section>
-      <h1>色マスター</h1>
+      <PageHeader title="色マスター" />
 
-      <div className={styles.summaryGrid}>
-        <div className={styles.card}>
-          <span className={styles.cardLabel}>登録色数</span>
-          <span className={styles.cardValue} data-testid="summary-total">
-            {summary.total}
-          </span>
+      <Panel>
+        <div className={styles.summaryGrid}>
+          <div className={styles.card}>
+            <span className={styles.cardLabel}>登録色数</span>
+            <span className={styles.cardValue} data-testid="summary-total">
+              {summary.total}
+            </span>
+          </div>
+          <div className={styles.card}>
+            <span className={styles.cardLabel}>未実施</span>
+            <span className={styles.cardValue} data-testid="summary-未実施">
+              {summary.未実施}
+            </span>
+          </div>
+          <div className={styles.card}>
+            <span className={styles.cardLabel}>量産検証</span>
+            <span className={styles.cardValue} data-testid="summary-量産検証">
+              {summary.量産検証}
+            </span>
+          </div>
+          <div className={styles.card}>
+            <span className={styles.cardLabel}>実生産</span>
+            <span className={styles.cardValue} data-testid="summary-実生産">
+              {summary.実生産}
+            </span>
+          </div>
         </div>
-        <div className={styles.card}>
-          <span className={styles.cardLabel}>未実施</span>
-          <span className={styles.cardValue} data-testid="summary-未実施">
-            {summary.未実施}
-          </span>
+      </Panel>
+
+      <Panel>
+        <div className={styles.toolbar}>
+          <label htmlFor="status-filter">ステータス</label>
+          <select id="status-filter" value={status} onChange={(e) => changeStatus(e.target.value)}>
+            <option value="">すべて</option>
+            <option value="未実施">未実施</option>
+            <option value="量産検証">量産検証</option>
+            <option value="実生産">実生産</option>
+          </select>
+
+          <label htmlFor="color-search">色番検索</label>
+          <input
+            id="color-search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="色番で検索"
+          />
+
+          <label htmlFor="import-file">ファイル</label>
+          <input
+            id="import-file"
+            type="file"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+          <Button
+            onClick={() => {
+              if (file) importColors.mutate(file);
+            }}
+          >
+            CSV取り込み
+          </Button>
         </div>
-        <div className={styles.card}>
-          <span className={styles.cardLabel}>量産検証</span>
-          <span className={styles.cardValue} data-testid="summary-量産検証">
-            {summary.量産検証}
-          </span>
-        </div>
-        <div className={styles.card}>
-          <span className={styles.cardLabel}>実生産</span>
-          <span className={styles.cardValue} data-testid="summary-実生産">
-            {summary.実生産}
-          </span>
-        </div>
-      </div>
 
-      <div className={styles.toolbar}>
-        <label htmlFor="status-filter">ステータス</label>
-        <select id="status-filter" value={status} onChange={(e) => changeStatus(e.target.value)}>
-          <option value="">すべて</option>
-          <option value="未実施">未実施</option>
-          <option value="量産検証">量産検証</option>
-          <option value="実生産">実生産</option>
-        </select>
-
-        <label htmlFor="color-search">色番検索</label>
-        <input
-          id="color-search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="色番で検索"
-        />
-
-        <label htmlFor="import-file">ファイル</label>
-        <input id="import-file" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        <button
-          type="button"
-          className={styles.actionButton}
-          onClick={() => {
-            if (file) importColors.mutate(file);
-          }}
-        >
-          取り込み
-        </button>
-      </div>
-
-      {importColors.isError && (
-        <p className={styles.importError}>{(importColors.error as Error).message}</p>
-      )}
-      {importColors.isSuccess && (
-        <p className={styles.importResult}>
-          作成: {importColors.data.created}件 / 更新: {importColors.data.updated}件 / スキップ:{" "}
-          {importColors.data.skipped}件
-          {importColors.data.errors.length > 0 && ` / エラー: ${importColors.data.errors.join(", ")}`}
-        </p>
-      )}
+        {importColors.isError && (
+          <p className={styles.importError}>{(importColors.error as Error).message}</p>
+        )}
+        {importColors.isSuccess && (
+          <p className={styles.importResult}>
+            作成: {importColors.data.created}件 / 更新: {importColors.data.updated}件 / スキップ:{" "}
+            {importColors.data.skipped}件
+            {importColors.data.errors.length > 0 &&
+              ` / エラー: ${importColors.data.errors.join(", ")}`}
+          </p>
+        )}
+      </Panel>
 
       {isLoading ? (
         <p>読み込み中...</p>
       ) : (
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>色番号</th>
-                <th>タプル</th>
-                <th>状態</th>
-                <th>色見本(R)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleColors.map((c) => (
-                <ColorRow key={c.id} color={c} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Panel>
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>色番号</th>
+                  <th>タプル</th>
+                  <th>状態</th>
+                  <th>色見本(R)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleColors.map((c) => (
+                  <ColorRow key={c.id} color={c} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
       )}
 
       <div className={styles.pager}>
-        <button
-          type="button"
-          className={styles.actionButton}
+        <Button
+          variant="secondary"
           disabled={offset === 0}
           onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
         >
           前へ
-        </button>
-        <span className={styles.pagerLabel}>{offset + 1}〜{offset + colors.length}件</span>
-        <button
-          type="button"
-          className={styles.actionButton}
+        </Button>
+        <span className={styles.pagerLabel}>
+          {offset + 1}〜{offset + colors.length}件
+        </span>
+        <Button
+          variant="secondary"
           disabled={colors.length < PAGE_SIZE}
           onClick={() => setOffset(offset + PAGE_SIZE)}
         >
           次へ
-        </button>
+        </Button>
       </div>
     </section>
   );

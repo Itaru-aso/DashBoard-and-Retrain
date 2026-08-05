@@ -123,12 +123,15 @@
     有効/無効チップは `valid_to === null` の有無から導出（新規APIなし）。
   - Refs: R4 ／ commit: `feat(ui-redesign): restyle threshold page`
 
-- [ ] **8. 色マスターページの再構成**
+- [x] **8. 色マスターページの再構成**
   - `frontend/src/pages/ColorMaster.tsx` を design.md §6.4 に合わせて再構成
     （検索行＋「CSV取り込み」→ テーブル（色見本スウォッチ・ライフサイクル StatusChip：
     実生産=ok／量産検証=warn系／未実施=neutral））。
-  - テスト（`ColorMaster.test.tsx`）: 既存テストを維持。ライフサイクル別 StatusChip 変種の描画を追加検証。
-  - 代替検証: `npm run dev` で目視確認。
+  - テスト（`ColorMaster.test.tsx`）: 既存テストを維持（取り込みボタン名の変更に追随）。
+    ライフサイクル別 StatusChip 変種（未実施/量産検証/実生産）の描画を追加検証。
+  - 代替検証: `npm run dev` で目視確認。問題なし。
+  - 実装時の変更（R7.3準拠・design.md表記に追随）: 取り込みボタンの表示文言を
+    「取り込み」→「CSV取り込み」に変更（design.md §6.4 の文言に合わせた。動作は無変更）。
   - Refs: R4 ／ commit: `feat(ui-redesign): restyle color master page`
 
 - [ ] **9. エッジPCページの再構成**

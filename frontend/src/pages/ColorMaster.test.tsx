@@ -35,6 +35,7 @@ const COLOR = {
 };
 
 const COLOR2 = { ...COLOR, id: 4, color_no: "002", status: "量産検証" };
+const COLOR3 = { ...COLOR, id: 5, color_no: "003", status: "実生産" };
 
 describe("ColorMaster", () => {
   beforeEach(() => {
@@ -54,12 +55,24 @@ describe("ColorMaster", () => {
     expect(screen.getByRole("cell", { name: "未実施" })).toBeInTheDocument();
   });
 
+  it("ライフサイクル状態をStatusChip（未実施/量産検証/実生産）で表示する", async () => {
+    (api.listColors as Mock).mockResolvedValue({
+      items: [COLOR, COLOR2, COLOR3],
+      limit: 50,
+      offset: 0,
+    });
+    renderWithClient(<ColorMaster />);
+    expect(await screen.findByRole("cell", { name: "未実施" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "量産検証" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "実生産" })).toBeInTheDocument();
+  });
+
   it("ファイル取り込み API を呼ぶ", async () => {
     renderWithClient(<ColorMaster />);
     await screen.findByText("001");
     const file = new File(["x"], "colors.xlsx");
     fireEvent.change(screen.getByLabelText("ファイル"), { target: { files: [file] } });
-    fireEvent.click(screen.getByRole("button", { name: "取り込み" }));
+    fireEvent.click(screen.getByRole("button", { name: "CSV取り込み" }));
     await waitFor(() => expect(api.importColors).toHaveBeenCalledTimes(1));
   });
 
@@ -74,7 +87,7 @@ describe("ColorMaster", () => {
     await screen.findByText("001");
     const file = new File(["x"], "colors.xlsx");
     fireEvent.change(screen.getByLabelText("ファイル"), { target: { files: [file] } });
-    fireEvent.click(screen.getByRole("button", { name: "取り込み" }));
+    fireEvent.click(screen.getByRole("button", { name: "CSV取り込み" }));
     expect(await screen.findByText(/作成: 3件/)).toBeInTheDocument();
     expect(screen.getByText(/更新: 2件/)).toBeInTheDocument();
     expect(screen.getByText(/スキップ: 1件/)).toBeInTheDocument();
@@ -86,7 +99,7 @@ describe("ColorMaster", () => {
     await screen.findByText("001");
     const file = new File(["x"], "colors.xlsx");
     fireEvent.change(screen.getByLabelText("ファイル"), { target: { files: [file] } });
-    fireEvent.click(screen.getByRole("button", { name: "取り込み" }));
+    fireEvent.click(screen.getByRole("button", { name: "CSV取り込み" }));
     expect(await screen.findByText("ヘッダ行がありません")).toBeInTheDocument();
   });
 

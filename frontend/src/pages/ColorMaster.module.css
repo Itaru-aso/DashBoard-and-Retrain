@@ -1,14 +1,13 @@
 .summaryGrid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 13px;
-  margin-bottom: 14px;
+  gap: var(--space-3);
 }
 
 .card {
-  padding: 13px 16px;
-  border-radius: 14px;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.02));
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--color-surface-sunken);
   border: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
@@ -30,9 +29,8 @@
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 13px;
+  gap: var(--space-3);
   flex-wrap: wrap;
-  margin-bottom: 14px;
 }
 
 .toolbar label {
@@ -45,20 +43,19 @@
 
 .toolbar select,
 .toolbar input {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   color: var(--color-text-primary);
   padding: 9px 12px;
-  border-radius: 9px;
+  border-radius: var(--radius);
   font-size: var(--font-size-body);
-  color-scheme: dark;
 }
 
 .pager {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 12px;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
 }
 
 .pagerLabel {
@@ -67,27 +64,20 @@
   font-family: var(--font-mono);
 }
 
-.actionButton:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
 .importResult {
   font-size: var(--font-size-body);
   color: var(--color-text-secondary);
-  margin: -6px 0 14px;
+  margin: var(--space-2) 0 0;
 }
 
 .importError {
   font-size: var(--font-size-body);
-  color: var(--color-accent-danger, #f87171);
-  margin: -6px 0 14px;
+  color: var(--color-bad);
+  margin: var(--space-2) 0 0;
 }
 
 .tableWrap {
   overflow-x: auto;
-  border-radius: 10px;
-  border: 1px solid var(--color-border);
 }
 
 .table {
@@ -97,20 +87,20 @@
 
 .table th {
   text-align: left;
-  padding: 11px 14px;
+  padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-caption);
   font-weight: 600;
   color: var(--color-text-secondary);
   letter-spacing: 0.5px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(16, 22, 34, 0.7);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-sunken);
 }
 
 .table td {
-  padding: 10px 14px;
+  padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-body);
   color: var(--color-text-secondary);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .mono {
@@ -120,34 +110,23 @@
 .swatchRow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .swatch {
   width: 20px;
   height: 20px;
   border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--color-border);
   flex: none;
 }
 
 .rgbInput {
   width: 72px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   color: var(--color-text-primary);
   padding: 6px 10px;
-  border-radius: 7px;
+  border-radius: var(--radius);
   font-size: var(--font-size-caption);
-}
-
-.actionButton {
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: rgba(34, 211, 238, 0.14);
-  color: #7fe3f3;
-  border: 1px solid rgba(34, 211, 238, 0.25);
-  font-size: var(--font-size-caption);
-  cursor: pointer;
-  font-family: inherit;
 }
