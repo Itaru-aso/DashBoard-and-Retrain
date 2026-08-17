@@ -118,3 +118,29 @@ def test_one_way_idempotent(db_session: Session) -> None:
     svc.evaluate(window_days=1, end_date=D1)
     svc.evaluate(window_days=1, end_date=D1)  # 再評価（後戻り・重複遷移なし）
     assert colors.get(color.id).status == "実生産"
+
+
+@pytest.mark.integration
+def test_evaluate_default_end_date_uses_jst(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """end_date 省略時、コンテナのシステムTZ（既定 UTC）に依存せず JST で「今日」を解決する。"""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from src.services import color_lifecycle_service as module
+    from src.services.color_lifecycle_service import ColorLifecycleService
+
+    captured: dict[str, object] = {}
+
+    class FakeDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            captured["tz"] = tz
+            return datetime(2026, 7, 29, 2, 30, tzinfo=tz)
+
+    monkeypatch.setattr(module, "datetime", FakeDatetime)
+
+    ColorLifecycleService(db_session).evaluate(window_days=1)
+
+    assert captured["tz"] == ZoneInfo("Asia/Tokyo")

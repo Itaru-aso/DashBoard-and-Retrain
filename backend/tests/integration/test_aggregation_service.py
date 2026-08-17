@@ -220,3 +220,30 @@ def test_aggregate_window_reaggregates_recent_days(
 
     # 既定引数（AGG_WINDOW_DAYS・今日起点）でも例外なく走る。
     service.aggregate_window()
+
+
+@pytest.mark.integration
+def test_aggregate_window_default_end_date_uses_jst(
+    inspection_session: Session, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """end_date 省略時、コンテナのシステムTZ（既定 UTC）に依存せず JST で「今日」を解決する。"""
+    from zoneinfo import ZoneInfo
+
+    from src.repositories.daily_metrics_repository import DailyMetricsRepository
+    from src.services import aggregation_service as module
+    from src.services.aggregation_service import AggregationService
+
+    captured: dict[str, object] = {}
+
+    class FakeDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            captured["tz"] = tz
+            return datetime(2026, 7, 29, 2, 30, tzinfo=tz)
+
+    monkeypatch.setattr(module, "datetime", FakeDatetime)
+
+    service = AggregationService(inspection_session, DailyMetricsRepository(db_session))
+    service.aggregate_window(window_days=1)
+
+    assert captured["tz"] == ZoneInfo("Asia/Tokyo")

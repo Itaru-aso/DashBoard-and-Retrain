@@ -12,7 +12,8 @@ daily_metrics（ver2）と color_master（ver2）の突合は Service 層で行�
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
@@ -23,6 +24,11 @@ from src.services.metrics import MetricCounts, compute_rates
 
 _FALSE_ALARM_MAX = 0.015  # 虚報率 ≤ 1.5%
 _MISS_MAX = 0.0005  # 見逃し率 ≤ 0.05%
+
+# `date.today()` はコンテナのシステムTZ（既定 UTC）に依存し、JST 早朝実行時は
+# 前日の UTC 日付になってしまう（日次＝JST日の不変条件と不整合）ため、
+# 明示的に JST で「今日」を解決する。
+_JST = ZoneInfo("Asia/Tokyo")
 
 
 class ColorLifecycleService:
@@ -35,7 +41,7 @@ class ColorLifecycleService:
     def evaluate(self, window_days: int | None = None, *, end_date: date | None = None) -> None:
         """直近 window 日で自動遷移を評価する。"""
         days = window_days if window_days is not None else settings.AGG_WINDOW_DAYS
-        end = end_date if end_date is not None else date.today()
+        end = end_date if end_date is not None else datetime.now(_JST).date()
         date_from = end - timedelta(days=days - 1)
 
         self._promote_to_verification(date_from, end)

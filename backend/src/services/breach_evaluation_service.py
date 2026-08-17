@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
@@ -26,6 +27,11 @@ logger = logging.getLogger(__name__)
 
 _METRICS = ("ng_rate", "false_alarm_rate", "miss_rate")
 
+# `date.today()` はコンテナのシステムTZ（既定 UTC）に依存し、JST 早朝実行時は
+# 前日の UTC 日付になってしまう（日次＝JST日の不変条件と不整合）ため、
+# 明示的に JST で「今日」を解決する。
+_JST = ZoneInfo("Asia/Tokyo")
+
 
 class BreachEvaluationService:
     """閾値駆動の日次逸脱評価（冪等・自動クローズ無し）。"""
@@ -38,7 +44,7 @@ class BreachEvaluationService:
     def evaluate(self, window_days: int | None = None, *, end_date: date | None = None) -> None:
         """直近 window 日を評価し、逸脱単位にタスクを upsert する。"""
         days = window_days if window_days is not None else settings.BREACH_EVAL_WINDOW_DAYS
-        end = end_date if end_date is not None else date.today()
+        end = end_date if end_date is not None else datetime.now(_JST).date()
         date_from = end - timedelta(days=days - 1)
 
         # daily_metrics を期間で読み、(JST日 × フルタプル) に号機合算する。
