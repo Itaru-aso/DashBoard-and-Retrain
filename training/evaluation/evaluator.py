@@ -1,5 +1,6 @@
 # training/evaluation/evaluator.py
 """evaluationステージ: 学習済みモデルの test-set オフライン評価。"""
+import json
 import os
 
 
@@ -17,11 +18,37 @@ class Evaluator:
         self.model_dir = os.path.join(cfg.common.model_dir, self.color, mode)
         self.mgr = mgr
 
+    @staticmethod
+    def _load_deployed_threshold(para_path):
+        """`para.json` の `threshold`（ONNXに焼かれ実機へ配信される閾値）を返す。
+
+        Args:
+            para_path: para.json のパス。
+
+        Returns:
+            float | None: 取得できた閾値。読めない・数値でない場合は None。
+        """
+        try:
+            with open(para_path, 'r', encoding='utf-8') as f:
+                para = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return None
+        value = para.get('threshold')
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        return float(value)
+
     def evaluate(self):
         """評価を実行してメトリクスを返す。
 
+        指標は **`para.json` の `threshold`（＝実機へ配信される閾値）** で算出する。
+        同一データ上で F1 を最大化する後付け閾値は、評価対象そのものにフィットする
+        ため楽観的に偏る（配信される挙動を表さない）。そのため `ref_f1_optimal_*`
+        として参考値のみ併記し、主指標には使わない。
+
         Returns:
             dict: AUC, F1, miss_rate, false_alarm_rate 等を含む dict。
+                  `threshold_from_para` は配信閾値を使えたかの指標（1.0/0.0）。
                   test データがない場合は None。
         """
         from evaluation.scoring import load_model, score_images, compute_metrics, find_optimal_threshold
@@ -53,14 +80,38 @@ class Evaluator:
             scores_good = list(scores_good_dict.values())
             scores_defect = list(scores_defect_dict.values())
 
-            threshold = find_optimal_threshold(scores_good, scores_defect)
-            metrics = compute_metrics(scores_good, scores_defect, threshold)
+            deployed_threshold = self._load_deployed_threshold(para_path)
+            if deployed_threshold is None:
+                print(
+                    f"⚠️ para.json に有効な threshold がありません: {para_path}"
+                    "（同一データでのF1最大化閾値で代替します。楽観的に偏るため参考値扱い）"
+                )
+                threshold = find_optimal_threshold(scores_good, scores_defect)
+                threshold_from_para = 0.0
+            else:
+                threshold = deployed_threshold
+                threshold_from_para = 1.0
 
+            metrics = compute_metrics(scores_good, scores_defect, threshold)
+            metrics['threshold_from_para'] = threshold_from_para
+
+            # 参考値: 同一データ上でF1を最大化する後付け閾値（配信判断には使わない）。
+            ref_threshold = find_optimal_threshold(scores_good, scores_defect)
+            ref_metrics = compute_metrics(scores_good, scores_defect, ref_threshold)
+            metrics['ref_f1_optimal_threshold'] = ref_threshold
+            metrics['ref_f1_optimal_F1'] = ref_metrics.get('F1', 0.0)
+
+            source = '配信閾値' if threshold_from_para else 'F1最大化(代替)'
             print(
                 f"[{self.mode}] 評価結果: AUC={metrics.get('AUC', 0.0):.4f}, "
                 f"false_alarm_rate={metrics.get('false_alarm_rate', 0.0):.4f}, "
                 f"miss_rate={metrics.get('miss_rate', 0.0):.4f}, "
-                f"F1={metrics.get('F1', 0.0):.4f}"
+                f"F1={metrics.get('F1', 0.0):.4f} "
+                f"(閾値={threshold:.6f} / {source})"
+            )
+            print(
+                f"[{self.mode}] 参考(同一データでのF1最大化・楽観バイアスあり): "
+                f"閾値={ref_threshold:.6f}, F1={ref_metrics.get('F1', 0.0):.4f}"
             )
             if self.mgr is not None:
                 self.mgr.log_metrics(metrics)
