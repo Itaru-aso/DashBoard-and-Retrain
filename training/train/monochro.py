@@ -29,6 +29,7 @@ from omegaconf import DictConfig
 from utils.channel_weights import compute_channel_weights
 from utils.edge_mask import slice_edge_excluded
 from utils.raw_shift_dataset import RawShiftImageFolder
+from utils.split_manager import split_files_by_product
 from utils.transforms import build_default_transform, resolve_normalize_mode
 
 
@@ -36,6 +37,13 @@ seed = 42
 random.seed(0)
 on_gpu = torch.cuda.is_available()
 out_channels = 384
+
+# export_root（マージンなし）の train/good を train/val に分割する比率。
+# color.py の `int(0.8 * len(full_train_set))` と同一。pool_train_ratio(0.7) は
+# 流用しない（train/good は既に pool_train_ratio の 70% 出力であり、再度 0.7 を
+# 掛けるとプール比 49%/21% になる）。
+# @.kiro/specs/retraining/eval-calibration-leak-fixes.md 決定2
+TIGHT_TRAIN_RATIO = 0.8
 
 
 if os.name != 'nt':
@@ -166,6 +174,73 @@ def _resolve_margin_good_root(cfg, color_num: str) -> str | None:
     return good_dirs[0]
 
 
+def _split_tight_good(train_good_dir, train_tf, seed):
+    """export_root（マージンなし）の `train/good` を撮像単位で train/val に分割する。
+
+    `test/good` は評価専用の held-out とし、学習・較正には一切参照しない（決定2・L1）。
+    以前は `test/good` をそのまま validation に使っていたため、閾値・cand1 較正に
+    使ったデータで評価する構造になっていた。
+
+    同一撮影の top/bottom が train と val に分かれないよう、分割は撮像単位で行う
+    （`utils.split_manager.split_files_by_product`・決定3）。
+
+    Args:
+        train_good_dir: `dataset_path/train/good` のパス。
+        train_tf: Dataset に渡す transform。
+        seed: 分割の再現性用 seed。
+
+    Returns:
+        tuple[Subset, Subset]: (train 側, validation 側)。
+    """
+    full = _FlatGoodImageFolder(train_good_dir, transform=train_tf)
+    index_of = {os.path.basename(p): i for i, p in enumerate(full.samples)}
+    train_names, val_names = split_files_by_product(
+        list(index_of.keys()), train_ratio=TIGHT_TRAIN_RATIO, seed=seed)
+    train_set = torch.utils.data.Subset(full, [index_of[n] for n in train_names])
+    validation_set = torch.utils.data.Subset(full, [index_of[n] for n in val_names])
+    return train_set, validation_set
+
+
+def _split_margin_by_file(margin_train_full, margin_val_full, pool_train_ratio, seed):
+    """マージンあり画像を**ファイル（撮像）単位**で train/val に分割する。
+
+    `RawShiftImageFolder` は `sample_mode="both"` で 1 raw 画像から top/bottom の
+    2サンプルを生成する（`__len__ = ファイル数 × 2`）。旧実装はサンプル数に対して
+    `randperm` を掛けていたため、**同一 raw 画像の top が train・bottom が val** に
+    分かれ、val サンプルの約7割はペア面が学習に使われていた（911/075で実測）。
+    較正セット（閾値・cand1 A/Z・teacher mean/std）が train から独立していないため、
+    閾値が実態より低く設定される方向に偏る。
+
+    展開倍率は `len(dataset) // len(dataset.paths)` から導出し、`sample_mode` を
+    前提に置かない。
+    詳細は @.kiro/specs/retraining/eval-calibration-leak-fixes.md 決定4。
+
+    Args:
+        margin_train_full: train 用 `RawShiftImageFolder`（シフトあり）。
+        margin_val_full: val 用 `RawShiftImageFolder`（offset=0 固定）。
+        pool_train_ratio: train 側へ振るファイルの比率。
+        seed: 分割の再現性用 seed。
+
+    Returns:
+        tuple[Subset, Subset]: (train 側, validation 側)。
+    """
+    n_files = len(margin_train_full.paths)
+    samples_per_file = len(margin_train_full) // n_files
+    rng = torch.Generator().manual_seed(seed)
+    file_perm = torch.randperm(n_files, generator=rng).tolist()
+    n_train_files = int(pool_train_ratio * n_files)
+
+    def _expand(file_indices):
+        return [i * samples_per_file + h
+                for i in file_indices for h in range(samples_per_file)]
+
+    margin_train_set = torch.utils.data.Subset(
+        margin_train_full, _expand(file_perm[:n_train_files]))
+    margin_val_set = torch.utils.data.Subset(
+        margin_val_full, _expand(file_perm[n_train_files:]))
+    return margin_train_set, margin_val_set
+
+
 def _build_datasets(
     cfg, dataset_path: str, color_num: str, train_tf,
     use_raw_shift: bool, crop_shift_max_px: int,
@@ -175,14 +250,18 @@ def _build_datasets(
 
     `use_raw_shift=True`（monochro専用のシフトaugmentation）の場合:
         train = マージンありgood画像の`pool_train_ratio`分（見つかった場合。±crop_shift_max_pxランダム
-                シフト） + export_root（マージンなし）good画像のtrain分（シフトなし）
+                シフト） + export_root（マージンなし）`train/good`の`TIGHT_TRAIN_RATIO`分（シフトなし）
         val   = マージンありgood画像の残り分（offset=0固定。crop_shift_max_pxによる位置ズレ頑強性は
                 train側のシフトaugmentationのみで獲得されるため、val/calibration側は推論時と同じ
-                offset=0の分布に揃える） + export_root（マージンなし）good画像のtest分（シフトなし）
+                offset=0の分布に揃える） + export_root `train/good`の残り分（シフトなし）
         マージンの分割比率は`pool_train_ratio`（monochro設定、既定0.7）を流用する。
         マージンあり画像が見つからない場合は export_root のみで学習を継続する（非致命的フォールバック）。
         defectカテゴリの画像はいずれの経路にも含まれない（マージン側はgoodカテゴリのみ解決し、
-        exportRoot側もtrain/good・test/good/imagesのみを参照するため）。
+        exportRoot側も`train/good`のみを参照するため）。
+
+        **`test/good` は参照しない**（評価専用の held-out。決定2・L1）。両経路の分割は
+        いずれも撮像単位で行い、同一撮影の top/bottom が train と val に跨らない
+        （決定3・決定4）。@.kiro/specs/retraining/eval-calibration-leak-fixes.md
 
     `use_raw_shift=False` の場合は既存動作（`dataset_path/train`のrandom 80/20分割）を変更しない。
 
@@ -191,10 +270,10 @@ def _build_datasets(
         （train_step計算・ログ表示）に使う「学習に使う全データ」を指す。
     """
     if use_raw_shift:
+        # test/good は評価専用の held-out とし、学習・較正には参照しない（決定2）。
         tight_train_good = os.path.join(dataset_path, 'train', 'good')
-        tight_test_good = os.path.join(dataset_path, 'test', 'good', 'images')
-        tight_train_set = _FlatGoodImageFolder(tight_train_good, transform=train_tf)
-        tight_validation_set = _FlatGoodImageFolder(tight_test_good, transform=train_tf)
+        tight_train_set, tight_validation_set = _split_tight_good(
+            tight_train_good, train_tf=train_tf, seed=seed)
 
         margin_root = _resolve_margin_good_root(cfg, color_num)
         if margin_root is not None:
@@ -204,7 +283,7 @@ def _build_datasets(
                 f'(±{crop_shift_max_px} px) で学習 (pool_train_ratio={pool_train_ratio}): {margin_root}'
             )
             # train用 (シフトあり) と val用 (offset=0固定) を同じ画像リストから作り、
-            # インデックスをrandpermで分割する (旧CW実装のtrain_full/val_full分割パターンと同一)。
+            # 後段でファイル(撮像)単位に分割する。
             margin_train_full = RawShiftImageFolder(
                 raw_root=margin_root, mode='monochro',
                 image_size_width=image_size_width,
@@ -221,14 +300,10 @@ def _build_datasets(
                 transform=train_tf,
                 seed=seed,
             )
-            margin_full_size = len(margin_train_full)
-            margin_train_size = int(pool_train_ratio * margin_full_size)
-            rng = torch.Generator().manual_seed(seed)
-            margin_indices = torch.randperm(margin_full_size, generator=rng).tolist()
-            margin_train_set = torch.utils.data.Subset(
-                margin_train_full, margin_indices[:margin_train_size])
-            margin_val_set = torch.utils.data.Subset(
-                margin_val_full, margin_indices[margin_train_size:])
+            # 分割はファイル(撮像)単位。同一 raw 画像の top/bottom を train と val に
+            # 分けないため（決定4）。
+            margin_train_set, margin_val_set = _split_margin_by_file(
+                margin_train_full, margin_val_full, pool_train_ratio, seed)
             train_set = torch.utils.data.ConcatDataset([margin_train_set, tight_train_set])
             validation_set = torch.utils.data.ConcatDataset([margin_val_set, tight_validation_set])
         else:
