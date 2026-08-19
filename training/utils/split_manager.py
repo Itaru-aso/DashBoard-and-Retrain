@@ -132,22 +132,24 @@ def split_pool_to_train_test(defect_pool_path, good_pool_path, dataset_path,
     os.makedirs(train_good_dir, exist_ok=True)
     os.makedirs(test_good_dir, exist_ok=True)
 
-    good_files = sorted(_list_images(good_pool_path)) if os.path.isdir(good_pool_path) else []
-    rng_good = random.Random(seed)
-    rng_good.shuffle(good_files)
-    n_train_good = max(1, round(len(good_files) * train_ratio)) if good_files else 0
+    # 良品も不良側と同様に「撮像単位」で振り分ける。同一撮影の top/bottom (`_0`/`_1`) が
+    # train と test に分かれると、評価・較正が学習データと相関してしまう。
+    # @.kiro/specs/retraining/eval-calibration-leak-fixes.md 決定3
+    good_files = _list_images(good_pool_path) if os.path.isdir(good_pool_path) else []
+    train_good_files, test_good_files = split_files_by_product(
+        good_files, train_ratio=train_ratio, seed=seed)
 
-    for i, f in enumerate(good_files):
-        dest_dir = train_good_dir if i < n_train_good else test_good_dir
-        src = os.path.join(good_pool_path, f)
-        dst = os.path.join(dest_dir, f)
-        if not os.path.exists(dst):
-            shutil.copy2(src, dst)
-            if i < n_train_good:
-                result['good_to_train'] += 1
-            else:
-                result['good_to_test'] += 1
-            result['files'].append({'src': src, 'dst': dst})
+    for files, dest_dir, count_key in (
+        (train_good_files, train_good_dir, 'good_to_train'),
+        (test_good_files, test_good_dir, 'good_to_test'),
+    ):
+        for f in files:
+            src = os.path.join(good_pool_path, f)
+            dst = os.path.join(dest_dir, f)
+            if not os.path.exists(dst):
+                shutil.copy2(src, dst)
+                result[count_key] += 1
+                result['files'].append({'src': src, 'dst': dst})
 
     return result
 
@@ -172,6 +174,40 @@ def _extract_product_id(filename):
     if len(parts) == 2 and parts[1].isdigit():
         return parts[0]
     return name
+
+
+def split_files_by_product(filenames, train_ratio, seed):
+    """ファイル一覧を**撮像単位**で train / test(val) の2つに分割する。
+
+    1回の撮影は top/bottom の2ファイル（`_0`/`_1`）に分かれるが、両者は同一製品・
+    同一照明・同一瞬間に由来し強く相関する。片面を学習に、他面を較正や評価に使うと
+    リークになるため、`_extract_product_id` でまとめた撮像単位で振り分ける。
+
+    `split_pool_to_train_test` の良品側と `train.monochro` の tight train/val 分割の
+    両方から呼ばれる共有ロジック。
+    詳細は @.kiro/specs/retraining/eval-calibration-leak-fixes.md 決定3。
+
+    Args:
+        filenames: 対象ファイル名のリスト（同一ディレクトリ内の名前）。
+        train_ratio: train 側へ振る撮像（製品ID）の比率。
+        seed: シャッフルの seed（再現性用）。
+
+    Returns:
+        tuple[list[str], list[str]]: (train 側ファイル名, test 側ファイル名)。
+            いずれもソート済み。同一 product_id のファイルは必ず同じ側に入る。
+    """
+    groups = _group_by_product_id(filenames)
+    group_ids = sorted(groups.keys())
+    rng = random.Random(seed)
+    rng.shuffle(group_ids)
+    n_train_groups = max(1, round(len(group_ids) * train_ratio)) if group_ids else 0
+    train_group_ids = set(group_ids[:n_train_groups])
+
+    train_files, test_files = [], []
+    for gid in sorted(groups.keys()):
+        dest = train_files if gid in train_group_ids else test_files
+        dest.extend(groups[gid])
+    return sorted(train_files), sorted(test_files)
 
 
 def _group_by_product_id(filenames):
