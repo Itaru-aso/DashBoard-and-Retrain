@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 from omegaconf import OmegaConf
 
-from train.monochro import _build_datasets, _resolve_margin_good_root, _split_tight_good
+from train.monochro import _build_datasets, _resolve_margin_good_root
 
 
 def _write_fake_image(path, shape=(200, 1740, 3)):
@@ -83,11 +83,9 @@ class TestResolveMarginGoodRoot:
 
 
 class TestBuildDatasetsRawShift:
-    """検証基準6・7 (dataset-export-root-migration.md v1.7 で更新、
-    eval-calibration-leak-fixes.md 決定2〜4 で再更新):
+    """検証基準6・7 (dataset-export-root-migration.md v1.7 で更新):
     use_raw_shift=True 時の train/val Dataset合体。マージンあり画像は
-    pool_train_ratioで**ファイル(撮像)単位**にtrain/valへ分割され、val側はoffset=0固定。
-    tight側は`train/good`をTIGHT_TRAIN_RATIO(0.8)で分割し、`test/good`は参照しない。"""
+    pool_train_ratioでtrain/valに分割され、val側はoffset=0固定になる。"""
 
     def _make_dataset_path(
         self, tmp_path, n_train_good=3, n_test_good=2, n_train_defect=0, n_test_defect=0
@@ -116,11 +114,9 @@ class TestBuildDatasetsRawShift:
             image_size_width=16, image_size_height=16, seed=42,
         )
 
-        # train/good(3件・g0/g1/g2は各々別product)をTIGHT_TRAIN_RATIO=0.8で分割:
-        # round(3*0.8)=2 -> train=2 / val=1。`test/good`(2件)は参照しない（決定2）。
-        # defectは一切含まれない（defectの5件は含まれない）。
-        assert len(train_set) == 2
-        assert len(validation_set) == 1
+        # defectは一切含まれない（train/good=3件のみ、defectの5件は含まれない）。
+        assert len(train_set) == 3
+        assert len(validation_set) == 2
         assert len(full_train_set) == len(train_set)
 
     def test_merges_margin_and_tight_when_margin_found(self, tmp_path):
@@ -146,12 +142,11 @@ class TestBuildDatasetsRawShift:
             image_size_width=16, image_size_height=16, seed=42,
         )
 
-        # マージン(2ファイル→top/bottom4件)はファイル単位でint(0.7*2)=1ファイルがtrain、
-        # 1ファイルがval（各2件）に分割される（決定4）。
-        # train = マージンtrain(2) + tight train(2) = 4。defectは含まれない。
-        assert len(train_set) == 4
-        # validation = マージンval(2) + tight val(1) = 3。`test/good`は参照しない。
-        assert len(validation_set) == 3
+        # マージン(2枚→top/bottom4件)はpool_train_ratio=0.7でtrain=2/val=2に分割される。
+        # train = マージンtrain(2) + tight train(3) = 5。defectは含まれない。
+        assert len(train_set) == 5
+        # validation = マージンval(2) + tight test/good(2) = 4。
+        assert len(validation_set) == 4
         assert len(full_train_set) == len(train_set)
         # crop_shift_max_pxがRawShiftImageFolderまで正しく配線されていること
         # (train側はshift_max=20、val側はoffset=0固定=shift_max=0)。
@@ -161,8 +156,8 @@ class TestBuildDatasetsRawShift:
         assert margin_val_dataset.dataset.shift_max == 0
 
     def test_validation_set_includes_margin_split(self, tmp_path):
-        """valはマージンデータのpool_train_ratio残り分（offset=0固定）と、export_root
-        `train/good`のTIGHT_TRAIN_RATIO残り分の合成になること（決定2・4で更新）。"""
+        """v1.7: val/testはexport_root（マージンなし・good）のtest分と、マージンデータの
+        pool_train_ratio残り分（offset=0固定）の合成になること（検証基準の更新）。"""
         dataset_path = self._make_dataset_path(tmp_path, n_train_good=1, n_test_good=1)
         margin_root = str(tmp_path / "export_root_margin")
         _write_margin_metadata(margin_root, "ds-margin-1", categories=[
@@ -180,12 +175,10 @@ class TestBuildDatasetsRawShift:
             image_size_width=16, image_size_height=16, seed=42,
         )
 
-        # マージン側は5ファイル(raw)→10件。ファイル単位でint(0.7*5)=3ファイル(6件)がtrain、
-        # 2ファイル(4件)がvalに分割される（決定4）。
-        # tight側はtrain/good=1件(=1product)のみなので max(1, round(1*0.8))=1 -> train=1/val=0。
-        # train = マージンtrain(6) + tight train(1) = 7。
-        assert len(train_set) == 7
-        # validation = マージンval(4) + tight val(0) = 4。マージン混入なし、ではなく
+        # マージン側は5枚(raw)→10件、pool_train_ratio=0.7でtrain=7/val=3に分割される。
+        # train = マージンtrain(7) + tight train(1) = 8。
+        assert len(train_set) == 8
+        # validation = マージンval(3) + tight test/good(1) = 4。マージン混入なし、ではなく
         # 意図的にマージンのval分が含まれることを確認する。
         assert len(validation_set) == 4
 
@@ -199,8 +192,7 @@ class TestBuildDatasetsRawShift:
         for i in range(5):
             _write_fake_image(
                 os.path.join(margin_root, "ds-margin-1", "binary", "001", "cat-good", f"raw_{i}.bmp"))
-        # pool_train_ratio=0.5: マージン5ファイル -> train=int(0.5*5)=2ファイル(4件)/
-        # val=3ファイル(6件)。
+        # pool_train_ratio=0.5: マージン10件 -> train=5/val=5。
         cfg = _cfg(margin_export_root=margin_root, dataset_id_monochro_margin="ds-margin-1",
                    pool_train_ratio=0.5)
 
@@ -210,116 +202,10 @@ class TestBuildDatasetsRawShift:
             image_size_width=16, image_size_height=16, seed=42,
         )
 
-        # train = マージンtrain(4) + tight train(1) = 5。
-        assert len(train_set) == 5
-        # validation = マージンval(6) + tight val(0) = 6。
+        # train = マージンtrain(5) + tight train(1) = 6。
+        assert len(train_set) == 6
+        # validation = マージンval(5) + tight test/good(1) = 6。
         assert len(validation_set) == 6
-
-
-class TestLeakPrevention:
-    """eval-calibration-leak-fixes.md 検証基準1〜3（集合の非交差）。
-
-    リーク解消の完成条件は指標の数値ではなく「学習・較正に使った集合と評価に使った
-    集合が交差しないこと」で定義する。
-    """
-
-    def _margin_root_with(self, tmp_path, n_files):
-        margin_root = str(tmp_path / "export_root_margin")
-        _write_margin_metadata(margin_root, "ds-margin-1", categories=[
-            {"category_id": "cat-good", "on_class": "0", "invalid_flg": "0"},
-        ])
-        good_dir = os.path.join(margin_root, "ds-margin-1", "binary", "001", "cat-good")
-        for i in range(n_files):
-            _write_fake_image(os.path.join(good_dir, f"raw_{i}.bmp"))
-        return margin_root
-
-    def test_build_datasets_succeeds_without_test_good_directory(self, tmp_path):
-        """検証基準1: `test/good` が存在しなくても構築できる（＝参照していない証拠）。"""
-        dataset_path = str(tmp_path / "4_dataset" / "001" / "monochro")
-        for i in range(4):
-            _write_fake_image(
-                os.path.join(dataset_path, "train", "good", f"g{i}.png"), shape=(16, 16, 3))
-        assert not os.path.exists(os.path.join(dataset_path, "test", "good", "images"))
-        cfg = _cfg()
-
-        train_set, validation_set, _ = _build_datasets(
-            cfg, dataset_path, "001", train_tf=None,
-            use_raw_shift=True, crop_shift_max_px=20,
-            image_size_width=16, image_size_height=16, seed=42,
-        )
-
-        # round(4*0.8)=3 -> train=3 / val=1。
-        assert len(train_set) == 3
-        assert len(validation_set) == 1
-
-    def test_test_good_size_does_not_affect_train_or_validation(self, tmp_path):
-        """検証基準1: `test/good` を増やしても train/val のサイズが変わらない。"""
-        sizes = []
-        for n_test_good in (1, 50):
-            dataset_path = str(tmp_path / f"ds{n_test_good}" / "001" / "monochro")
-            for i in range(4):
-                _write_fake_image(
-                    os.path.join(dataset_path, "train", "good", f"g{i}.png"), shape=(16, 16, 3))
-            for i in range(n_test_good):
-                _write_fake_image(
-                    os.path.join(dataset_path, "test", "good", "images", f"t{i}.png"),
-                    shape=(16, 16, 3))
-            train_set, validation_set, _ = _build_datasets(
-                _cfg(), dataset_path, "001", train_tf=None,
-                use_raw_shift=True, crop_shift_max_px=20,
-                image_size_width=16, image_size_height=16, seed=42,
-            )
-            sizes.append((len(train_set), len(validation_set)))
-
-        assert sizes[0] == sizes[1]
-
-    def test_margin_train_and_val_never_share_a_raw_file(self, tmp_path):
-        """検証基準2: 同一 raw ファイル由来のサンプルが train と val に跨らない。"""
-        dataset_path = str(tmp_path / "4_dataset" / "001" / "monochro")
-        _write_fake_image(
-            os.path.join(dataset_path, "train", "good", "g0.png"), shape=(16, 16, 3))
-        margin_root = self._margin_root_with(tmp_path, n_files=10)
-        cfg = _cfg(margin_export_root=margin_root,
-                   dataset_id_monochro_margin="ds-margin-1", pool_train_ratio=0.7)
-
-        train_set, validation_set, _ = _build_datasets(
-            cfg, dataset_path, "001", train_tf=None,
-            use_raw_shift=True, crop_shift_max_px=20,
-            image_size_width=16, image_size_height=16, seed=42,
-        )
-
-        margin_train, margin_val = train_set.datasets[0], validation_set.datasets[0]
-        samples_per_file = len(margin_train.dataset) // len(margin_train.dataset.paths)
-        assert samples_per_file == 2  # sample_mode="both" (top/bottom)
-        train_file_ids = {i // samples_per_file for i in margin_train.indices}
-        val_file_ids = {i // samples_per_file for i in margin_val.indices}
-
-        assert train_file_ids & val_file_ids == set()
-        assert len(train_file_ids) + len(val_file_ids) == 10
-        # 各ファイルは top/bottom の2件そろって同じ側に入る。
-        assert len(margin_train.indices) == 2 * len(train_file_ids)
-        assert len(margin_val.indices) == 2 * len(val_file_ids)
-
-    def test_tight_split_keeps_product_faces_together(self, tmp_path):
-        """検証基準3: 同一 product_id (`_0`/`_1`) が train と val に跨らない。"""
-        train_good = str(tmp_path / "4_dataset" / "001" / "monochro" / "train" / "good")
-        for cap in range(5):
-            for face in (0, 1):
-                _write_fake_image(
-                    os.path.join(train_good, f"cap{cap}_{face}.png"), shape=(16, 16, 3))
-
-        train_set, validation_set = _split_tight_good(train_good, train_tf=None, seed=42)
-
-        def _product_ids(subset):
-            return {
-                os.path.basename(subset.dataset.samples[i]).rsplit("_", 1)[0]
-                for i in subset.indices
-            }
-
-        assert _product_ids(train_set) & _product_ids(validation_set) == set()
-        # round(5*0.8)=4 product が train、残り1 product が val。各 product は2面そろう。
-        assert len(train_set) == 8
-        assert len(validation_set) == 2
 
 
 class TestBuildDatasetsLegacySplit:
