@@ -91,6 +91,9 @@ monochro:
     blend_n_mid: 30        # sigmoid blend の中点 (50/50 になる test/defect 枚数)
     blend_scale: 10.0      # sigmoid の遷移急峻さ (大きいほど緩やか)
     max_fpr: 0.05          # pAUC で見る FPR 上限 (運用 FPR=0.03 にマージン)
+  edge_mask_w: 2           # 両端 N pixel を loss/quantile/threshold/cand1較正から除外 (padding artifact 抑制)。
+                           # color(既存2)と対称化。075実測: 実機良品の閾値超過率 89.5%→79.0%
+                           # (n=200、cand1較正のedge_mask不整合バグ修正後に確認。決定6・7参照)
 
   # 評価・閾値
   cutoff: 0.33
