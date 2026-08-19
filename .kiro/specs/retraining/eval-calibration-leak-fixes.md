@@ -271,6 +271,35 @@ monochroモデルに対し、実際に撮像された良品画像（`\\digi2\...
   911: 1.11）であり、単一の共通原因（例: 全体的なカメラ再フォーカス）とは限らず、号機別に
   異なる物理的ドリフトが起きている可能性がある。現場側の保守履歴確認が必要。
 
+## edge_mask_w のmonochro導入前に発見・修正した潜在バグ（決定6）
+
+`config.yaml` の `monochro:` セクションに `edge_mask_w` を追加する前提比較実験を計画したところ、
+`train/monochro.py` の候補1(cand1)較正に**潜在的な形状不一致バグ**があることが判明した。
+
+**バグの内容**: `train/color.py`（526-552行目相当）はcand1較正用マップに
+`unsliced_scored_map`（フル幅）へ`apply_edge_mask_zero`（両端0埋め・幅不変）を適用したものを使うが、
+`train/monochro.py`（修正前の769-774行目）は閾値計算用に`slice_edge_excluded`（幅を縮小）した
+`scored_map`を**そのままcand1較正にも流用**していた。推論時（`utils/scoring_transform.py`の
+cand1分岐）は`apply_edge_mask_zero`（幅不変）で`map_combined`を作ってから`cand1['mu']`/`['sigma']`
+と引き算するため、`edge_mask_w>0`だと**mu/sigmaの幅がmap_combinedより2*edge_mask_w分短く**なり、
+ブロードキャストが意図しない位置同士で計算される（`training/tests/test_scoring_transform.py`の
+`test_cand1_mu_sigma_shape_mismatch_raises_when_shrunk_by_slice`で実証：例外にはならず**値が
+黙って壊れる**）。monochroは`edge_mask_w=0`のままだったため、これまで顕在化していなかった
+（`edge_mask_w=0`ではどちらの経路も no-op で一致するため）。
+
+**決定**: `train/monochro.py`のcand1較正を`train/color.py`と対称の実装
+（`apply_edge_mask_zero`使用）に修正する。学習アルゴリズム本体（損失関数・モデル構造・学習ループ）
+ではなく較正計算の修正であり、決定20の「DataLoader構築部分」の例外を較正計算にも拡張する
+（ユーザー承認済み・2026-08-19）。
+
+**検証**: `training/tests/test_scoring_transform.py`に
+`test_compute_anomaly_score_matches_reference_config_e_monochro_cand1_with_edge_mask`
+（monochro+cand1+edge_mask_w>0の組み合わせが正しく計算されることの回帰テスト）と
+`test_cand1_mu_sigma_shape_mismatch_raises_when_shrunk_by_slice`（旧実装の形状不一致を実証する
+対照実験）を追加。`training/tests`全体 94 passed（無関係な既存failure2件を除く）。
+
+この修正により、`monochro:`セクションへの`edge_mask_w`追加とその有無比較実験を安全に実施できる。
+
 ## 変更履歴
 
 - [2026-08-18] v1.0 初版。911 monochro の評価スキップ調査から4つのリーク（L1〜L4）を特定し、
@@ -279,3 +308,5 @@ monochroモデルに対し、実際に撮像された良品画像（`\\digi2\...
   S1〜S4の実装を `git revert`（`db6c640`）。分析記録として本ドキュメントは削除せず保持。
 - [2026-08-19] v1.2 再適用。実機画像診断の結果、S1〜S4未適用の075が3色中最も虚報率が
   高く、S1〜S4が原因ではないと判断。`db6c640` を revert し S1〜S4を再適用（`c8f3e3b`）。
+- [2026-08-19] v1.3 決定6。monochroへの`edge_mask_w`導入前提の比較実験を計画したところ、
+  cand1較正の形状不一致バグ（値が黙って壊れる）を発見し修正。

@@ -27,7 +27,7 @@ from train.common import (numpy_encoder, focal_feature_loss, GaussianNoise,
                           map_normalization, teacher_normalization)
 from omegaconf import DictConfig
 from utils.channel_weights import compute_channel_weights
-from utils.edge_mask import slice_edge_excluded
+from utils.edge_mask import apply_edge_mask_zero, slice_edge_excluded
 from utils.raw_shift_dataset import RawShiftImageFolder
 from utils.split_manager import split_files_by_product
 from utils.transforms import build_default_transform, resolve_normalize_mode
@@ -751,7 +751,7 @@ def train_monochro(cfg: DictConfig, mgr=None):
     # F1 最大化閾値の計算 (validation set から)
     print('閾値計算中...')
     scores_val = []
-    cand1_maps = []  # 候補1 (z-score) 較正用: per-image の scored_map (edge_mask 適用後, 2D)
+    cand1_maps = []  # 候補1 (z-score) 較正用: per-image の scored_map (apply_edge_mask_zero適用後, 2D)
     for image, _ in tqdm(validation_loader, desc='Computing threshold scores'):
         if on_gpu:
             image = image.to(device)
@@ -765,13 +765,18 @@ def train_monochro(cfg: DictConfig, mgr=None):
             map_st = torch.mean(diff_st, dim=1, keepdim=True)
         if q_st_start is not None:
             map_st = 0.1 * (map_st - q_st_start) / (q_st_end - q_st_start)
-        scored_map = best_st * map_st
-        scored_map = slice_edge_excluded(scored_map, edge_mask_w)
+        unsliced_scored_map = best_st * map_st
+        scored_map = slice_edge_excluded(unsliced_scored_map, edge_mask_w)
         score = scored_map.max().item()
         scores_val.append(score)
-        # 候補1: per-image の 2D マップを保持 (batch_size>1 に対応)
-        for b in range(scored_map.shape[0]):
-            cand1_maps.append(scored_map[b, 0].detach().cpu().numpy())
+        # 候補1較正は推論時(scoring_transform.pyのcand1分岐)と同じ edge_mask 規約
+        # (apply_edge_mask_zero=フル幅・両端0埋め)で計算する必要がある。
+        # slice_edge_excluded(幅を縮小)で較正すると、edge_mask_w>0のとき
+        # 推論時の mu/sigma とのブロードキャスト形状が不一致になる
+        # (color.py と対称化。color側コメント参照)。
+        cand1_map = apply_edge_mask_zero(unsliced_scored_map, edge_mask_w)
+        for b in range(cand1_map.shape[0]):
+            cand1_maps.append(cand1_map[b, 0].detach().cpu().numpy())
 
     scores_np = np.array(scores_val)
     threshold_val = float(np.quantile(scores_np, 0.995))
@@ -779,7 +784,8 @@ def train_monochro(cfg: DictConfig, mgr=None):
     print(f'閾値: {threshold_val:.6f} (validation 99.5パーセンタイル)')
 
     # 候補1 (raw + z-score OR, monochro 専用) 較正: μ,σ,A,Z を算出して para に保存。
-    # raw/z は scored_map(=st_para·map_st, edge_mask 適用後の 56x120) で算出し model.py forward と一致させる。
+    # raw/z は cand1_map(=st_para·map_st に apply_edge_mask_zero 適用後、フル幅56x120)
+    # で算出し model.py forward (scoring_transform.py の cand1 分岐) と形状を一致させる。
     # cand1_enabled が無い旧 para / color では z-OR 無効=従来 raw 動作 (後方互換)。
     try:
         from utils.candidate1_calib import (

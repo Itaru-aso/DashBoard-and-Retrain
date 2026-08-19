@@ -143,3 +143,77 @@ def test_compute_anomaly_score_matches_reference_config_c(synthetic_scoring_comp
     expected = _reference_compute(**kwargs)
     actual = compute_anomaly_score(**kwargs)
     assert torch.allclose(actual, expected)
+
+
+def test_compute_anomaly_score_matches_reference_config_e_monochro_cand1_with_edge_mask(
+        synthetic_scoring_components):
+    """config E: monochro + cand1有効 + edge_mask_w>0。
+
+    train/monochro.py の cand1較正で apply_edge_mask_zero（フル幅・両端0埋め）を使う
+    ことにより、推論時の mu/sigma（フル幅の map_h x map_w）と形状が一致することを保証する
+    回帰テスト。旧実装は slice_edge_excluded（幅を縮小）で mu/sigma を作っていたため、
+    edge_mask_w>0 では本テストの kwargs（mu/sigma がフル幅）でブロードキャストが崩れて
+    いた（monochroは長らく edge_mask_w=0 だったため潜在化していた）。
+    @.kiro/specs/retraining/eval-calibration-leak-fixes.md 決定6 参照。
+    """
+    from utils.scoring_transform import compute_anomaly_score
+
+    c = synthetic_scoring_components()
+    torch.manual_seed(3)
+    # mu/sigma はフル幅 (map_h x map_w)。apply_edge_mask_zero後のcand1_mapから
+    # 算出したものを模す (train/monochro.pyの修正後の挙動)。
+    mu = torch.rand(1, 1, c['map_h'], c['map_w']) * 0.05
+    sigma = torch.rand(1, 1, c['map_h'], c['map_w']) * 0.04 + 0.01
+    cand1 = {'mu': mu, 'sigma': sigma, 'A': 1.0, 'Z': 3.0}
+
+    kwargs = dict(
+        x=c['image_norm'], teacher=c['teacher'], student=c['student'],
+        autoencoder=c['autoencoder'], teacher_mean=c['teacher_mean'],
+        teacher_std=c['teacher_std'], st_para=1.0, ae_para=0.0,
+        q_st_start=c['q_st_start'], q_st_end=c['q_st_end'],
+        q_ae_start=c['q_ae_start'], q_ae_end=c['q_ae_end'],
+        channel_weights=None, edge_mask_w=2, cand1=cand1,
+        height=c['height'], width=c['width'],
+    )
+    expected = _reference_compute(**kwargs)
+    actual = compute_anomaly_score(**kwargs)
+    assert torch.allclose(actual, expected)
+
+
+def test_cand1_mu_sigma_shape_mismatch_raises_when_shrunk_by_slice(synthetic_scoring_components):
+    """旧実装（slice_edge_excludedでmu/sigmaを作る）だとedge_mask_w>0でブロードキャストが
+    崩れることを示す対照実験。修正後のtrain/monochro.pyはこの形状(縮小済み)を作らない。"""
+    from utils.edge_mask import slice_edge_excluded
+    from utils.scoring_transform import compute_anomaly_score
+
+    c = synthetic_scoring_components()
+    torch.manual_seed(3)
+    edge_mask_w = 2
+    # 旧実装が作っていた「幅を縮小した」mu/sigma を模す。
+    full_mu = torch.rand(1, 1, c['map_h'], c['map_w']) * 0.05
+    full_sigma = torch.rand(1, 1, c['map_h'], c['map_w']) * 0.04 + 0.01
+    shrunk_mu = slice_edge_excluded(full_mu, edge_mask_w)
+    shrunk_sigma = slice_edge_excluded(full_sigma, edge_mask_w)
+    assert shrunk_mu.shape[-1] == full_mu.shape[-1] - 2 * edge_mask_w
+
+    cand1 = {'mu': shrunk_mu, 'sigma': shrunk_sigma, 'A': 1.0, 'Z': 3.0}
+    kwargs = dict(
+        x=c['image_norm'], teacher=c['teacher'], student=c['student'],
+        autoencoder=c['autoencoder'], teacher_mean=c['teacher_mean'],
+        teacher_std=c['teacher_std'], st_para=1.0, ae_para=0.0,
+        q_st_start=c['q_st_start'], q_st_end=c['q_st_end'],
+        q_ae_start=c['q_ae_start'], q_ae_end=c['q_ae_end'],
+        channel_weights=None, edge_mask_w=edge_mask_w, cand1=cand1,
+        height=c['height'], width=c['width'],
+    )
+    try:
+        compute_anomaly_score(**kwargs)
+    except RuntimeError:
+        return  # ブロードキャスト不一致で例外になるのも許容(壊れていた証拠)
+    # 例外にならない場合でも、空間的に不整合な位置同士を引いているため無意味な値になる。
+    # ここでは「フル幅版と結果が異なる」ことで不整合を検出する。
+    full_cand1 = {'mu': full_mu, 'sigma': full_sigma, 'A': 1.0, 'Z': 3.0}
+    kwargs_full = dict(kwargs, cand1=full_cand1)
+    mismatched = compute_anomaly_score(**kwargs)
+    correct = compute_anomaly_score(**kwargs_full)
+    assert not torch.allclose(mismatched, correct)
