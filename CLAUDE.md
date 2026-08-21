@@ -6,15 +6,6 @@ YKK のジッパー外観検査における **AI モデル管理 Web アプリ�
 > 個人の作法（日本語で回答/コミット、方針提示→承認、最小変更、動作証明で完了 等）は**グローバル CLAUDE.md** に定義済み。
 > 本ファイルは**本プロジェクト固有**の規約・コマンド・禁止事項のみを記載する（重複させない）。
 
-## 技術スタック
-- **バックエンド**: Python 3.11 / FastAPI + Uvicorn（`--workers 1`）/ SQLAlchemy 2.0 + psycopg2 / Alembic / Pydantic v2
-- **フロントエンド**: React 18 + Vite + TypeScript / TanStack Query / recharts
-- **DB**: PostgreSQL ×2（モデルB。ver2＝読み書き／app_db＝読み取り専用）
-- **インフラ**: Docker（base `nvidia/cuda:12.8+-runtime-ubuntu22.04` + Python 3.11 + PyTorch cu128 系・Blackwell 対応）
-- **開発手法**: cc-sdd（Spec-Driven Development）/ TDD
-
----
-
 ## 開発コマンド
 
 ```bash
@@ -148,13 +139,13 @@ training/                        # 既存学習パイプライン（pipline.py �
   既存パラメータ`st_augmentation.color_jitter_saturation`の値変更（候補A・コード変更不要）と、
   `training/train/common.py`の`get_st_transform`へのhue jitter新規追加（候補B・config-gated・
   既定無効）を、単一要因のまま並行検証する（直列の次点候補ではない。組み合わせ構成は検証しない）。
-  config.yaml の `color:` セクションは color_no 非依存のため、566に加えて代表色番（001・316等）
+  config.yaml の `color:` セクションは color_no 非依存のため、566に加えて代表色番（030・316等）
   でも非劣化ゲート（各色番自身のモデルで採点。cross-color評価は使わない）を確認してから恒久化
   すること。新設備一般化ゲート（既存設備データのみで学習したモデルでの新設備画像推論精度が
   既存設備データ同水準まで改善）も満たさない限り config.yaml への反映は行わない。損失関数・
   モデル構造・学習ループ、brightness/contrast augmentation（decision18で悪化確認済み）は
-  対象外・変更不可のまま。566の新設備データを追加収集して再学習する対応は、上記augmentation
-  拡張とは別レーン（データ追加のみのため元々この例外の対象外）で並行実施してよい）
+  対象外・変更不可のまま。566の新設備データでの再学習は、gate(b)検証データの枯渇を避けるため
+  実施しない方針（2026-08-21ユーザー決定）とし、augmentation拡張を唯一の対策として進める）
 - spec と実装が食い違ったとき、**spec を直さずコードを優先**すること
 
 ---
@@ -191,7 +182,7 @@ training/                        # 既存学習パイプライン（pipline.py �
 - `@.kiro/specs/retraining/st-augmentation-sharpness-robustness.md` | monochro ST側aug拡張（sharpen/blur・撮像環境ドリフト頑強性・ADR）
 - `@.kiro/specs/retraining/eval-calibration-leak-fixes.md` | 評価・較正データリークの分析記録（S1〜S4は精度低下によりrevert済み・撤回経緯を含むADR）
 - `@.kiro/specs/retraining/monochro-margin-local-cache.md` | monochro margin画像の実行毎ローカル一時キャッシュ化（ネットワーク帯域ボトルネック対策・ADR）
-- `@.kiro/specs/retraining/color-saturation-drift-566.md` | 566番新設備の彩度/色味ドリフト対応（主対策=データ再学習、保険策=color ST側augmentation拡張検証・ADR）
+- `@.kiro/specs/retraining/color-saturation-drift-566.md` | 566番新設備の彩度/色味ドリフト対応（color ST側augmentation拡張検証。データ再学習は見送り・ADR）
 
 ### 資料の正・参照（`docs/reference/`）
 | ファイル | 概要 |
