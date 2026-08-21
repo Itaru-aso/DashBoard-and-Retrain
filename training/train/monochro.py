@@ -17,6 +17,7 @@ import itertools
 import os
 import random
 import json
+import shutil
 from PIL import Image
 from tqdm import tqdm
 from torch.amp import GradScaler, autocast
@@ -174,6 +175,46 @@ def _resolve_margin_good_root(cfg, color_num: str) -> str | None:
     return good_dirs[0]
 
 
+_MARGIN_CACHE_EXTENSIONS = ('.bmp', '.png', '.jpg', '.jpeg', '.tiff')
+
+
+def _sync_margin_cache(margin_root: str, cache_dir: str) -> str:
+    """`margin_root`（ネットワーク共有上のraw画像ディレクトリ）を`cache_dir`へ一括コピーする。
+
+    `RawShiftImageFolder`が学習エポック毎に`margin_root`へ都度アクセスするとネットワーク
+    帯域がボトルネックになる（実測: 145.7ms/枚、色番あたりの学習ループが5時間超）ため、
+    1回のパイプライン実行の間だけ有効なローカルコピーを作る。
+
+    差分同期・世代管理は行わず、コピー前に`cache_dir`を必ず空にする（前回・他色番の
+    残留物を残さない。実行毎に全量を作り直すため整合性検証も不要）。
+    詳細は @.kiro/specs/retraining/monochro-margin-local-cache.md。
+
+    Args:
+        margin_root: コピー元（ネットワーク共有上のgoodカテゴリディレクトリ）。
+        cache_dir: コピー先のローカルディレクトリ。
+
+    Returns:
+        str: `cache_dir`（`RawShiftImageFolder`の`raw_root`にそのまま渡せる）。
+    """
+    if os.path.isdir(cache_dir):
+        shutil.rmtree(cache_dir)
+    os.makedirs(cache_dir, exist_ok=True)
+
+    n_copied = 0
+    for dirpath, _, filenames in os.walk(margin_root):
+        rel = os.path.relpath(dirpath, margin_root)
+        dst_dir = cache_dir if rel == '.' else os.path.join(cache_dir, rel)
+        for fn in filenames:
+            if not fn.lower().endswith(_MARGIN_CACHE_EXTENSIONS):
+                continue
+            os.makedirs(dst_dir, exist_ok=True)
+            shutil.copy2(os.path.join(dirpath, fn), os.path.join(dst_dir, fn))
+            n_copied += 1
+
+    print(f'[raw_shift_cache] {margin_root} → {cache_dir} へ {n_copied}枚をローカルキャッシュ')
+    return cache_dir
+
+
 def _split_tight_good(train_good_dir, train_tf, seed):
     """export_root（マージンなし）の `train/good` を撮像単位で train/val に分割する。
 
@@ -282,10 +323,15 @@ def _build_datasets(
                 f'[raw_shift_dataset] マージンあり画像から random crop_offset '
                 f'(±{crop_shift_max_px} px) で学習 (pool_train_ratio={pool_train_ratio}): {margin_root}'
             )
+            # ネットワーク共有への毎エポック直接アクセスがボトルネックになるため、
+            # 今回の実行分だけローカルへ一括コピーしてそちらを読む
+            # (@.kiro/specs/retraining/monochro-margin-local-cache.md)。
+            cache_dir = cfg.get('raw_shift_cache_dir', './_cache/raw_shift_margin')
+            margin_read_root = _sync_margin_cache(margin_root, cache_dir)
             # train用 (シフトあり) と val用 (offset=0固定) を同じ画像リストから作り、
             # 後段でファイル(撮像)単位に分割する。
             margin_train_full = RawShiftImageFolder(
-                raw_root=margin_root, mode='monochro',
+                raw_root=margin_read_root, mode='monochro',
                 image_size_width=image_size_width,
                 image_size_height=image_size_height,
                 crop_shift_max_px=crop_shift_max_px,
@@ -293,7 +339,7 @@ def _build_datasets(
                 seed=seed,
             )
             margin_val_full = RawShiftImageFolder(
-                raw_root=margin_root, mode='monochro',
+                raw_root=margin_read_root, mode='monochro',
                 image_size_width=image_size_width,
                 image_size_height=image_size_height,
                 crop_shift_max_px=0,

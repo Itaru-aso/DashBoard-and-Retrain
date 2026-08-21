@@ -176,6 +176,8 @@ training/                        # 既存学習パイプライン（pipline.py �
 - `@.kiro/specs/deployment/production-deployment-design.md` | 本番（Shisui_trainPC）デプロイ設計（ADR）
 - `@.kiro/specs/ui-redesign/design.md` | UIリデザイン設計（藍染テキスタイル・ADR。フロントのみ・API不変）
 - `@.kiro/specs/retraining/st-augmentation-sharpness-robustness.md` | monochro ST側aug拡張（sharpen/blur・撮像環境ドリフト頑強性・ADR）
+- `@.kiro/specs/retraining/eval-calibration-leak-fixes.md` | 評価・較正データリークの分析記録（S1〜S4は精度低下によりrevert済み・撤回経緯を含むADR）
+- `@.kiro/specs/retraining/monochro-margin-local-cache.md` | monochro margin画像の実行毎ローカル一時キャッシュ化（ネットワーク帯域ボトルネック対策・ADR）
 
 ### 資料の正・参照（`docs/reference/`）
 | ファイル | 概要 |

@@ -15,7 +15,9 @@ import numpy as np
 import pytest
 from omegaconf import OmegaConf
 
-from train.monochro import _build_datasets, _resolve_margin_good_root, _split_tight_good
+from train.monochro import (
+    _build_datasets, _resolve_margin_good_root, _split_tight_good, _sync_margin_cache,
+)
 
 
 def _write_fake_image(path, shape=(200, 1740, 3)):
@@ -32,11 +34,13 @@ def _write_margin_metadata(margin_root, dataset_id, categories):
         json.dump({"id": dataset_id, "name": "monochro_5_YY", "category": categories}, f)
 
 
-def _cfg(margin_export_root="", dataset_id_monochro_margin="", pool_train_ratio=0.7):
+def _cfg(margin_export_root="", dataset_id_monochro_margin="", pool_train_ratio=0.7,
+         raw_shift_cache_dir=""):
     return OmegaConf.create({
         "margin_export_root": margin_export_root,
         "dataset_id_monochro_margin": dataset_id_monochro_margin,
         "pool_train_ratio": pool_train_ratio,
+        "raw_shift_cache_dir": raw_shift_cache_dir,
     })
 
 
@@ -138,7 +142,7 @@ class TestBuildDatasetsRawShift:
         _write_fake_image(
             os.path.join(margin_root, "ds-margin-1", "binary", "001", "cat-defect", "raw_d.bmp"))
         cfg = _cfg(margin_export_root=margin_root, dataset_id_monochro_margin="ds-margin-1",
-                   pool_train_ratio=0.7)
+                   pool_train_ratio=0.7, raw_shift_cache_dir=str(tmp_path / "_cache"))
 
         train_set, validation_set, full_train_set = _build_datasets(
             cfg, dataset_path, "001", train_tf=None,
@@ -172,7 +176,7 @@ class TestBuildDatasetsRawShift:
             _write_fake_image(
                 os.path.join(margin_root, "ds-margin-1", "binary", "001", "cat-good", f"raw_{i}.bmp"))
         cfg = _cfg(margin_export_root=margin_root, dataset_id_monochro_margin="ds-margin-1",
-                   pool_train_ratio=0.7)
+                   pool_train_ratio=0.7, raw_shift_cache_dir=str(tmp_path / "_cache"))
 
         train_set, validation_set, _ = _build_datasets(
             cfg, dataset_path, "001", train_tf=None,
@@ -202,7 +206,7 @@ class TestBuildDatasetsRawShift:
         # pool_train_ratio=0.5: マージン5ファイル -> train=int(0.5*5)=2ファイル(4件)/
         # val=3ファイル(6件)。
         cfg = _cfg(margin_export_root=margin_root, dataset_id_monochro_margin="ds-margin-1",
-                   pool_train_ratio=0.5)
+                   pool_train_ratio=0.5, raw_shift_cache_dir=str(tmp_path / "_cache"))
 
         train_set, validation_set, _ = _build_datasets(
             cfg, dataset_path, "001", train_tf=None,
@@ -280,7 +284,8 @@ class TestLeakPrevention:
             os.path.join(dataset_path, "train", "good", "g0.png"), shape=(16, 16, 3))
         margin_root = self._margin_root_with(tmp_path, n_files=10)
         cfg = _cfg(margin_export_root=margin_root,
-                   dataset_id_monochro_margin="ds-margin-1", pool_train_ratio=0.7)
+                   dataset_id_monochro_margin="ds-margin-1", pool_train_ratio=0.7,
+                   raw_shift_cache_dir=str(tmp_path / "_cache"))
 
         train_set, validation_set, _ = _build_datasets(
             cfg, dataset_path, "001", train_tf=None,
@@ -343,3 +348,48 @@ class TestBuildDatasetsLegacySplit:
         assert len(full_train_set) == 10
         assert len(train_set) == 8
         assert len(validation_set) == 2
+
+
+class TestSyncMarginCache:
+    """`_sync_margin_cache`（ネットワーク共有→ローカル一時キャッシュ）のテスト。
+
+    @.kiro/specs/retraining/monochro-margin-local-cache.md の検証基準。
+    """
+
+    def test_copies_all_images_from_source(self, tmp_path):
+        src = tmp_path / "margin_root"
+        for i in range(3):
+            _write_fake_image(str(src / f"raw_{i}.bmp"), shape=(16, 16, 3))
+        cache_dir = str(tmp_path / "_cache")
+
+        result = _sync_margin_cache(str(src), cache_dir)
+
+        assert result == cache_dir
+        copied = sorted(os.listdir(cache_dir))
+        assert copied == ["raw_0.bmp", "raw_1.bmp", "raw_2.bmp"]
+
+    def test_ignores_non_image_files(self, tmp_path):
+        src = tmp_path / "margin_root"
+        _write_fake_image(str(src / "raw_0.bmp"), shape=(16, 16, 3))
+        os.makedirs(src, exist_ok=True)
+        with open(src / "_import_done.marker", "w", encoding="utf-8") as f:
+            f.write("")
+        cache_dir = str(tmp_path / "_cache")
+
+        _sync_margin_cache(str(src), cache_dir)
+
+        assert os.listdir(cache_dir) == ["raw_0.bmp"]
+
+    def test_clears_previous_cache_content_before_copying(self, tmp_path):
+        cache_dir = str(tmp_path / "_cache")
+        os.makedirs(cache_dir, exist_ok=True)
+        stale_path = os.path.join(cache_dir, "stale_from_other_color.bmp")
+        with open(stale_path, "w", encoding="utf-8") as f:
+            f.write("")
+
+        src = tmp_path / "margin_root"
+        _write_fake_image(str(src / "raw_0.bmp"), shape=(16, 16, 3))
+
+        _sync_margin_cache(str(src), cache_dir)
+
+        assert os.listdir(cache_dir) == ["raw_0.bmp"]
