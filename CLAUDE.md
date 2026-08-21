@@ -141,7 +141,15 @@ training/                        # 既存学習パイプライン（pipline.py �
   `training/train/common.py` の `get_st_transform` へ sharpen/blur augmentation オプション
   （config-gated・既定無効・monochro セクションのみ有効化）を追加することを承認済み
   （@.kiro/specs/retraining/st-augmentation-sharpness-robustness.md、2026-08-05）。
-  color 側の config は変更せず、損失関数・モデル構造・学習ループは対象外・変更不可のまま）
+  color 側の config は変更せず、損失関数・モデル構造・学習ループは対象外・変更不可のまま。
+  さらに例外: 566番新設備立ち上げに伴う彩度/色味ドリフト対応に限り、color の ST側augmentation
+  拡張の検証実験を承認済み（@.kiro/specs/retraining/color-saturation-drift-566.md、2026-08-21）。
+  第一候補は既存パラメータ`st_augmentation.color_jitter_saturation`の値変更のみ（コード変更不要）、
+  不十分な場合の次点候補としてのみ`training/train/common.py`の`get_st_transform`へのhue jitter
+  新規追加を許可する。config.yaml の `color:` セクションは color_no 非依存のため、566に加えて
+  代表色番（001・316等）でも非劣化ゲートを確認してから恒久化すること。ゲート（非劣化・
+  新設備適合）を満たさない限り config.yaml への反映は行わない。損失関数・モデル構造・学習ループ、
+  brightness/contrast augmentation（decision18で悪化確認済み）は対象外・変更不可のまま）
 - spec と実装が食い違ったとき、**spec を直さずコードを優先**すること
 
 ---
@@ -178,6 +186,7 @@ training/                        # 既存学習パイプライン（pipline.py �
 - `@.kiro/specs/retraining/st-augmentation-sharpness-robustness.md` | monochro ST側aug拡張（sharpen/blur・撮像環境ドリフト頑強性・ADR）
 - `@.kiro/specs/retraining/eval-calibration-leak-fixes.md` | 評価・較正データリークの分析記録（S1〜S4は精度低下によりrevert済み・撤回経緯を含むADR）
 - `@.kiro/specs/retraining/monochro-margin-local-cache.md` | monochro margin画像の実行毎ローカル一時キャッシュ化（ネットワーク帯域ボトルネック対策・ADR）
+- `@.kiro/specs/retraining/color-saturation-drift-566.md` | 566番新設備の彩度/色味ドリフト対応（主対策=データ再学習、保険策=color ST側augmentation拡張検証・ADR）
 
 ### 資料の正・参照（`docs/reference/`）
 | ファイル | 概要 |
