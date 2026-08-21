@@ -144,12 +144,17 @@ training/                        # 既存学習パイプライン（pipline.py �
   color 側の config は変更せず、損失関数・モデル構造・学習ループは対象外・変更不可のまま。
   さらに例外: 566番新設備立ち上げに伴う彩度/色味ドリフト対応に限り、color の ST側augmentation
   拡張の検証実験を承認済み（@.kiro/specs/retraining/color-saturation-drift-566.md、2026-08-21）。
-  第一候補は既存パラメータ`st_augmentation.color_jitter_saturation`の値変更のみ（コード変更不要）、
-  不十分な場合の次点候補としてのみ`training/train/common.py`の`get_st_transform`へのhue jitter
-  新規追加を許可する。config.yaml の `color:` セクションは color_no 非依存のため、566に加えて
-  代表色番（001・316等）でも非劣化ゲートを確認してから恒久化すること。ゲート（非劣化・
-  新設備適合）を満たさない限り config.yaml への反映は行わない。損失関数・モデル構造・学習ループ、
-  brightness/contrast augmentation（decision18で悪化確認済み）は対象外・変更不可のまま）
+  観測された彩度ズレ（スケール方向）と色味ズレ（色相方向）はメカニズムが異なるため、
+  既存パラメータ`st_augmentation.color_jitter_saturation`の値変更（候補A・コード変更不要）と、
+  `training/train/common.py`の`get_st_transform`へのhue jitter新規追加（候補B・config-gated・
+  既定無効）を、単一要因のまま並行検証する（直列の次点候補ではない。組み合わせ構成は検証しない）。
+  config.yaml の `color:` セクションは color_no 非依存のため、566に加えて代表色番（001・316等）
+  でも非劣化ゲート（各色番自身のモデルで採点。cross-color評価は使わない）を確認してから恒久化
+  すること。新設備一般化ゲート（既存設備データのみで学習したモデルでの新設備画像推論精度が
+  既存設備データ同水準まで改善）も満たさない限り config.yaml への反映は行わない。損失関数・
+  モデル構造・学習ループ、brightness/contrast augmentation（decision18で悪化確認済み）は
+  対象外・変更不可のまま。566の新設備データを追加収集して再学習する対応は、上記augmentation
+  拡張とは別レーン（データ追加のみのため元々この例外の対象外）で並行実施してよい）
 - spec と実装が食い違ったとき、**spec を直さずコードを優先**すること
 
 ---
