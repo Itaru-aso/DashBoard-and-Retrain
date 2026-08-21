@@ -191,9 +191,14 @@ color:
   backbone: wide_resnet101
   teacher_weights: null
   num_workers: 4
-  epochs: 40           # monochro と同等 (旧 50 → 31 で学習時間 -38% 見込み、early_stop が効いてれば精度影響小)
+  # 316の比較実験で epochs=40 より同一FPR水準の検知率が一貫して優位だったため 50 を採用
+  # (FPR0.41%で 80.0%→83.5%)。決定17の適用漏れを 2026-08-20 に全色番へ反映した。
+  # max_train_step=45000 は「epochs=50 でキャップが効かない」ための非拘束値であり運用点
+  # としては未検証。epochs をこれ以上増やすとキャップが支配的になるため 50 で止める。
+  # @.kiro/specs/retraining/color-anomaly-score-cand1-pilot.md 決定17
+  epochs: 50
   train_step: 50000
-  max_train_step: 25000
+  max_train_step: 45000
   val_interval: 2000        # validation 周期 (step 単位)。null なら len(train_loader)
   early_stop_patience: 4
   early_stop_min_delta: 0.005
