@@ -90,9 +90,12 @@ def get_st_transform(cfg):
     brightness = st_cfg.get('color_jitter_brightness', 0)
     contrast = st_cfg.get('color_jitter_contrast', 0)
     saturation = st_cfg.get('color_jitter_saturation', 0)
-    if brightness > 0 or contrast > 0 or saturation > 0:
+    # hue: 彩度/色味ドリフト対応(候補B、既定0=無効・後方互換)。
+    # @.kiro/specs/retraining/color-saturation-drift-566.md
+    hue = st_cfg.get('color_jitter_hue', 0)
+    if brightness > 0 or contrast > 0 or saturation > 0 or hue > 0:
         tf_list.append(transforms.ColorJitter(
-            brightness=brightness, contrast=contrast, saturation=saturation))
+            brightness=brightness, contrast=contrast, saturation=saturation, hue=hue))
     sharpen_p = st_cfg.get('sharpen_p', 0)
     if sharpen_p > 0:
         tf_list.append(RandomSharpness(

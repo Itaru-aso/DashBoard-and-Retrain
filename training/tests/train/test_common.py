@@ -250,6 +250,43 @@ def test_get_st_transform_blur_enabled_adds_gaussian_blur():
     assert "GaussianBlur" in names
 
 
+def test_get_st_transform_hue_enabled_adds_colorjitter_with_hue():
+    """color_jitter_hue>0 で ColorJitter が hue 有効な状態で追加される
+    （彩度/色味ドリフト対応、@.kiro/specs/retraining/color-saturation-drift-566.md 候補B）。"""
+    from omegaconf import OmegaConf
+
+    from train.common import get_st_transform
+
+    cfg = OmegaConf.create({
+        "st_augmentation": {
+            "enabled": True,
+            "color_jitter_hue": 0.05,
+        }
+    })
+    result = get_st_transform(cfg)
+    names = _flatten_transforms(result)
+    assert "ColorJitter" in names
+    cj = next(t for t in result.transforms if type(t).__name__ == "ColorJitter")
+    assert cj.hue == (-0.05, 0.05)
+
+
+def test_get_st_transform_hue_absent_keeps_default_disabled():
+    """color_jitter_hue未設定（既定）では hue は無効のまま（後方互換）。"""
+    from omegaconf import OmegaConf
+
+    from train.common import get_st_transform
+
+    cfg = OmegaConf.create({
+        "st_augmentation": {
+            "enabled": True,
+            "color_jitter_brightness": 0.1,
+        }
+    })
+    result = get_st_transform(cfg)
+    cj = next(t for t in result.transforms if type(t).__name__ == "ColorJitter")
+    assert cj.hue is None
+
+
 def test_random_sharpness_deterministic_apply_increases_sharpness():
     """RandomSharpness を p=1.0・factor固定で適用するとシャープネスが実際に上がる。"""
     import cv2
