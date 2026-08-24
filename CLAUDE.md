@@ -145,7 +145,13 @@ training/                        # 既存学習パイプライン（pipline.py �
   既存設備データ同水準まで改善）も満たさない限り config.yaml への反映は行わない。損失関数・
   モデル構造・学習ループ、brightness/contrast augmentation（decision18で悪化確認済み）は
   対象外・変更不可のまま。566の新設備データでの再学習は、gate(b)検証データの枯渇を避けるため
-  実施しない方針（2026-08-21ユーザー決定）とし、augmentation拡張を唯一の対策として進める）
+  実施しない方針（2026-08-21ユーザー決定）とし、augmentation拡張を唯一の対策として進める。
+  候補A・Bはフル長検証で有効性を確認できず（候補Aは効果なし、候補Bは非劣化ゲートに影響し
+  かつseed間で4.1〜23.0%と不安定）、2026-08-24ユーザー承認により
+  `training/train/common.py`への`RandomChannelGain`新規追加（候補C・config-gated・既定無効。
+  診断された「R-B色味差」（ホワイトバランス/色温度ズレ）をR・Bチャネル個別ゲインで直接模擬。
+  hue回転〔候補B〕とは異なるメカニズム）を追加承認した。候補A・B・Cのいずれについても、
+  上記のゲート（非劣化・新設備一般化）を満たさない限り config.yaml への反映は行わない）
 - spec と実装が食い違ったとき、**spec を直さずコードを優先**すること
 
 ---
@@ -191,6 +197,7 @@ training/                        # 既存学習パイプライン（pipline.py �
 | `@docs/reference/db-app-mapping.md` | ver2 DB 7テーブル↔Repository/Service/API/Job・外部config/env対応、既知のギャップ |
 | `@docs/reference/retraining-integration-answers.md` | 既存学習パイプライン連携の事実 |
 | `@docs/reference/retraining-file-index.md` | 実装ファイルの配置先インデックス |
+| `@docs/reference/retraining-batch-training-manual.md` | 複数色番の一括学習マニュアル（`pipline.py`直接起動・データ確認・バッチスクリプト・監視） |
 | `@docs/reference/cc-sdd-impl-playbook.md` | cc-sdd 実装手順・指示文雛形 |
 | `@docs/reference/test-overview.md` | 現在実装済みテストの内容一覧（業務ロジック=Service層を重点整理） |
 | `@docs/reference/<feature>/...` | 各機能の参照実装（src と同構成・コピー禁止） |

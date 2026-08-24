@@ -287,6 +287,79 @@ def test_get_st_transform_hue_absent_keeps_default_disabled():
     assert cj.hue is None
 
 
+def test_get_st_transform_channel_gain_enabled_adds_random_channel_gain():
+    """channel_gain_p>0 で RandomChannelGain が変換列に追加される
+    （彩度/色味ドリフト対応・候補C、@.kiro/specs/retraining/color-saturation-drift-566.md）。"""
+    from omegaconf import OmegaConf
+
+    from train.common import get_st_transform
+
+    cfg = OmegaConf.create({
+        "st_augmentation": {
+            "enabled": True,
+            "channel_gain_p": 0.5,
+            "channel_gain_d_max": 0.15,
+        }
+    })
+    names = _flatten_transforms(get_st_transform(cfg))
+    assert "RandomChannelGain" in names
+
+
+def test_get_st_transform_channel_gain_absent_keeps_default_disabled():
+    """channel_gain_p未設定（既定）では RandomChannelGain が追加されない（後方互換）。"""
+    from omegaconf import OmegaConf
+
+    from train.common import get_st_transform
+
+    cfg = OmegaConf.create({
+        "st_augmentation": {
+            "enabled": True,
+            "color_jitter_brightness": 0.1,
+        }
+    })
+    names = _flatten_transforms(get_st_transform(cfg))
+    assert "RandomChannelGain" not in names
+
+
+def test_random_channel_gain_deterministic_apply_shifts_r_minus_b():
+    """RandomChannelGain を p=1.0・d固定で適用すると、R-Bの平均差が指定方向に縮む。"""
+    import numpy as np
+    from PIL import Image
+
+    from train.common import RandomChannelGain
+
+    rng = np.random.RandomState(0)
+    arr = rng.randint(60, 200, size=(64, 128, 3), dtype=np.uint8)
+    img = Image.fromarray(arr)
+
+    def r_minus_b(pil):
+        a = np.array(pil, dtype=np.float64)
+        return (a[..., 0] - a[..., 2]).mean()
+
+    tf = RandomChannelGain(d_min=0.15, d_max=0.15, p=1.0)
+    out = tf(img)
+    assert isinstance(out, Image.Image)
+    assert out.size == img.size
+    # d=0.15: R*=(1-0.15), B*=(1+0.15) なので R-Bはより小さく(より負に)なる
+    assert r_minus_b(out) < r_minus_b(img)
+
+
+def test_random_channel_gain_p_zero_is_identity():
+    """RandomChannelGain を p=0 で適用すると画像は変化しない。"""
+    import numpy as np
+    from PIL import Image
+
+    from train.common import RandomChannelGain
+
+    rng = np.random.RandomState(0)
+    arr = rng.randint(60, 200, size=(64, 128, 3), dtype=np.uint8)
+    img = Image.fromarray(arr)
+
+    tf = RandomChannelGain(d_min=0.15, d_max=0.15, p=0.0)
+    out = tf(img)
+    assert np.array_equal(np.array(out), np.array(img))
+
+
 def test_random_sharpness_deterministic_apply_increases_sharpness():
     """RandomSharpness を p=1.0・factor固定で適用するとシャープネスが実際に上がる。"""
     import cv2

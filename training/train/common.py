@@ -75,6 +75,30 @@ class RandomSharpness:
         return TF.adjust_sharpness(image, factor)
 
 
+class RandomChannelGain:
+    """R・Bチャネルの相対ゲインをランダムに振る変換（pickle可能）。
+
+    d を [d_min, d_max] の一様乱数で引き、R*=(1-d)・B*=(1+d) を適用する。
+    診断されたR-B色味差（ホワイトバランス/色温度ズレ）を直接模擬する単一パラメータの
+    jitterであり、hue jitter（HSV色相を色相環上で回転）とはメカニズムが異なる
+    （彩度/色味ドリフト対応 候補C、@.kiro/specs/retraining/color-saturation-drift-566.md）。
+    """
+    def __init__(self, d_min=0.0, d_max=0.15, p=0.5):
+        self.d_min = d_min
+        self.d_max = d_max
+        self.p = p
+
+    def __call__(self, image):
+        import torchvision.transforms.functional as TF
+        if torch.rand(1).item() >= self.p:
+            return image
+        d = self.d_min + (self.d_max - self.d_min) * torch.rand(1).item()
+        tensor = TF.to_tensor(image).clone()
+        tensor[0] = torch.clamp(tensor[0] * (1 - d), 0.0, 1.0)
+        tensor[2] = torch.clamp(tensor[2] * (1 + d), 0.0, 1.0)
+        return TF.to_pil_image(tensor)
+
+
 def get_st_transform(cfg):
     """ST入力用の軽微なAugmentationを構築する（configで無効化可能）。
 
@@ -107,6 +131,14 @@ def get_st_transform(cfg):
         sigma_max = st_cfg.get('gaussian_blur_sigma_max', 0.6)
         tf_list.append(transforms.RandomApply(
             [transforms.GaussianBlur(kernel_size=5, sigma=(0.1, sigma_max))], p=blur_p))
+    # channel_gain: 彩度/色味ドリフト対応(候補C、既定0=無効・後方互換)。
+    # @.kiro/specs/retraining/color-saturation-drift-566.md
+    channel_gain_p = st_cfg.get('channel_gain_p', 0)
+    if channel_gain_p > 0:
+        tf_list.append(RandomChannelGain(
+            d_min=st_cfg.get('channel_gain_d_min', 0.0),
+            d_max=st_cfg.get('channel_gain_d_max', 0.15),
+            p=channel_gain_p))
     if not tf_list:
         return None
     return transforms.Compose(tf_list)
