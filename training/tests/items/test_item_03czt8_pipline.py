@@ -30,12 +30,12 @@ def test_trainer_run_uses_item_03czt8_train_functions():
 def test_build_sub_cfg_merges_common_and_mode():
     cfg = OmegaConf.create({
         "common": {"target_color": "053", "batch_size": 4},
-        "monochro": {"image_size_height": 356, "image_size_width": 512},
+        "monochro": {"image_size_height": 384, "image_size_width": 512},
         "color": {"image_size_height": 384, "image_size_width": 384},
     })
     sub = copied_pipline.build_sub_cfg(cfg, "monochro", gpu_id=0)
     assert sub.target_color == "053"
-    assert sub.image_size_height == 356
+    assert sub.image_size_height == 384
     assert sub.mode == "monochro"
 
 
@@ -60,7 +60,7 @@ def test_conf_03czt8_yaml_loads_with_expected_output_paths():
     assert cfg.common.dataset_id_color == "03CZT8-color"
     assert cfg.common.dataset_id_monochro_margin == "03CZT8-monochro"
     # リサイズサイズ(決定2)。
-    assert cfg.monochro.image_size_height == 356
+    assert cfg.monochro.image_size_height == 384
     assert cfg.monochro.image_size_width == 512
     assert cfg.color.image_size_height == 384
     assert cfg.color.image_size_width == 384

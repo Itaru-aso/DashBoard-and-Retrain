@@ -29,7 +29,7 @@ class TestItem03CZT8RawShiftImageFolderMonochro:
             _write_gradient_image(tmp_path / f"raw_{i}.bmp")
         ds = Item03CZT8RawShiftImageFolder(
             raw_root=str(tmp_path), mode="monochro",
-            image_size_width=512, image_size_height=356,
+            image_size_width=512, image_size_height=384,
             crop_x0=655, crop_width=950, overlap=50,
         )
         assert len(ds) == 6
@@ -38,24 +38,24 @@ class TestItem03CZT8RawShiftImageFolderMonochro:
         _write_gradient_image(tmp_path / "raw_0.bmp")
         ds = Item03CZT8RawShiftImageFolder(
             raw_root=str(tmp_path), mode="monochro",
-            image_size_width=512, image_size_height=356,
+            image_size_width=512, image_size_height=384,
             crop_x0=655, crop_width=950, overlap=50,
         )
         img = ds[0]
         assert isinstance(img, Image.Image)
-        assert img.size == (512, 356)
+        assert img.size == (512, 384)
 
     def test_seed_makes_shift_reproducible(self, tmp_path):
         _write_gradient_image(tmp_path / "raw_0.bmp")
         ds1 = Item03CZT8RawShiftImageFolder(
             raw_root=str(tmp_path), mode="monochro",
-            image_size_width=950, image_size_height=356,
+            image_size_width=950, image_size_height=384,
             crop_x0=655, crop_width=950, overlap=50,
             crop_shift_max_px=20, seed=42,
         )
         ds2 = Item03CZT8RawShiftImageFolder(
             raw_root=str(tmp_path), mode="monochro",
-            image_size_width=950, image_size_height=356,
+            image_size_width=950, image_size_height=384,
             crop_x0=655, crop_width=950, overlap=50,
             crop_shift_max_px=20, seed=42,
         )
@@ -67,7 +67,7 @@ class TestItem03CZT8RawShiftImageFolderMonochro:
         _write_gradient_image(tmp_path / "raw_0.bmp")
         ds = Item03CZT8RawShiftImageFolder(
             raw_root=str(tmp_path), mode="monochro",
-            image_size_width=950, image_size_height=356,
+            image_size_width=950, image_size_height=384,
             crop_x0=655, crop_width=950, overlap=50,
             crop_shift_max_px=0,
         )
@@ -91,6 +91,6 @@ class TestItem03CZT8RawShiftImageFolderEmptyRoot:
         with pytest.raises(FileNotFoundError):
             Item03CZT8RawShiftImageFolder(
                 raw_root=str(tmp_path), mode="monochro",
-                image_size_width=512, image_size_height=356,
+                image_size_width=512, image_size_height=384,
                 crop_x0=655, crop_width=950, overlap=50,
             )

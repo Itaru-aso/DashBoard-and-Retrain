@@ -212,6 +212,7 @@ training/                        # 既存学習パイプライン（pipline.py �
 | `@docs/reference/retraining-integration-answers.md` | 既存学習パイプライン連携の事実 |
 | `@docs/reference/retraining-file-index.md` | 実装ファイルの配置先インデックス |
 | `@docs/reference/retraining-batch-training-manual.md` | 複数色番の一括学習マニュアル（`pipline.py`直接起動・データ確認・バッチスクリプト・監視） |
+| `@docs/reference/new-item-03czt8-training-manual.md` | 新規サイズアイテム03CZT8モデル作成マニュアル（Windows/PowerShell、Teacher pretraining・学習パイプライン実行・バッチ処理） |
 | `@docs/reference/cc-sdd-impl-playbook.md` | cc-sdd 実装手順・指示文雛形 |
 | `@docs/reference/test-overview.md` | 現在実装済みテストの内容一覧（業務ロジック=Service層を重点整理） |
 | `@docs/reference/<feature>/...` | 各機能の参照実装（src と同構成・コピー禁止） |

@@ -28,22 +28,22 @@ class TestProcessImageItemMonochro:
     def test_returns_resized_top_and_bottom(self):
         image_data = _make_gradient_bytes(width=2048, height=1220)
         top, bottom, elapsed = process_image_item(
-            image_data, image_size_width=512, image_size_height=356, mode="monochro",
+            image_data, image_size_width=512, image_size_height=384, mode="monochro",
             crop_x0=655, crop_width=950, overlap=50,
         )
-        assert top.shape == (356, 512, 3)
-        assert bottom.shape == (356, 512, 3)
+        assert top.shape == (384, 512, 3)
+        assert bottom.shape == (384, 512, 3)
         assert elapsed >= 0
 
     def test_crop_offset_x_shifts_crop_position(self):
         """crop_offset_xはmonochro専用のランダムシフト(既存RawShiftImageFolderと同等機能)。"""
         image_data = _make_gradient_bytes(width=2048, height=1220)
         top_no_offset, _, _ = process_image_item(
-            image_data, image_size_width=950, image_size_height=356, mode="monochro",
+            image_data, image_size_width=950, image_size_height=384, mode="monochro",
             crop_x0=655, crop_width=950, overlap=50, crop_offset_x=0,
         )
         top_with_offset, _, _ = process_image_item(
-            image_data, image_size_width=950, image_size_height=356, mode="monochro",
+            image_data, image_size_width=950, image_size_height=384, mode="monochro",
             crop_x0=655, crop_width=950, overlap=50, crop_offset_x=10,
         )
         # crop_offset_x=10だけx方向にずれているため、リサイズなし(width=950=crop_width)の

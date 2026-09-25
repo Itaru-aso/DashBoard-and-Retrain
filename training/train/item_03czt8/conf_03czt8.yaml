@@ -32,7 +32,7 @@ common:
     chain: 'CZT8'
   target_color: '053'
   pretraining_dir: ./0_pretraining   # 学習入力 (Teacher 重み)。03CZT8向けサイズの
-                                      # Teacher重み(512x356 monochro / 384x384 color)は
+                                      # Teacher重み(384x512 monochro / 384x384 color)は
                                       # 別途用意が必要（未解決事項参照）。
   # 03CZT8専用の出力パス分離(決定4)。05CZT8等の既存色番と物理的に分離する。
   dataset_path: ./4_dataset_03czt8
@@ -64,8 +64,10 @@ common:
 
 # モノクロ専用
 monochro:
-  # 03CZT8向けリサイズ(決定2): アスペクト比温存(クロップ後660:950≈0.695)。
-  image_size_height: 356
+  # 03CZT8向けリサイズ(決定2、2026-09-25ユーザー指示により356→384に変更):
+  # クロップ後比660:950≈0.695からはやや外れるが、384は既存のpdn_small_output_size()
+  # docstring例(384→88)にも載っている実績値。
+  image_size_height: 384
   image_size_width: 512
   model_size: small
   backbone: wide_resnet101
