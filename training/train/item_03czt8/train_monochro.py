@@ -1,0 +1,838 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+"""03CZT8専用 monochro 学習スクリプト。
+
+`training/train/monochro.py` の `train_monochro()` 系のコピーである。既存の
+`training/train/monochro.py` は一切変更しない
+（`.kiro/specs/retraining/new-item-03czt8-model-creation.md` v3.0 決定3）。
+
+コピー元との差分は以下のみ:
+    - `utils.raw_shift_dataset.RawShiftImageFolder` の代わりに
+      `train.item_03czt8.margin_dataset.Item03CZT8RawShiftImageFolder` を使う
+      （03CZT8向けのcrop_x0/crop_width/overlapをDataLoader構築部分で渡すため）。
+    - crop_x0/crop_width/overlapは本ファイル内の定数(CROP_X0/CROP_WIDTH/OVERLAP)
+      として保持する（共有 `training/conf/config.yaml` には追加しない、決定5）。
+
+損失関数・モデル構造・学習ループ自体は変更していない
+（`utils.common`/`train.common`等の既存モジュールをそのままimportして使用する。
+決定3の「無変更でimport」区分）。
+
+保守負債に関する注記: `training/train/monochro.py` と設計・ロジックが大部分重複する。
+`train/monochro.py`側に不具合修正・仕様変更が入る場合は、本ファイルへの影響有無を
+確認すること（同ADR「リスク」節参照）。
+
+実行: cd training && python -m train.item_03czt8.train_monochro
+"""
+import numpy as np
+import torch
+from torch.utils.data import DataLoader, Dataset
+from torchvision import transforms
+import itertools
+import os
+import random
+import json
+import shutil
+from PIL import Image
+from tqdm import tqdm
+from torch.amp import GradScaler, autocast
+from utils.common import (get_autoencoder, get_pdn_small, get_pdn_medium,
+                          ImageFolderWithoutTarget, InfiniteDataloader)
+from train.common import (numpy_encoder, focal_feature_loss, GaussianNoise,
+                          get_st_transform, TrainTransform, predict,
+                          map_normalization, teacher_normalization)
+from omegaconf import DictConfig
+from utils.channel_weights import compute_channel_weights
+from utils.edge_mask import apply_edge_mask_zero, slice_edge_excluded
+from train.item_03czt8.margin_dataset import Item03CZT8RawShiftImageFolder
+from utils.split_manager import split_files_by_product
+from utils.transforms import build_default_transform, resolve_normalize_mode
+
+
+seed = 42
+random.seed(0)
+on_gpu = torch.cuda.is_available()
+out_channels = 384
+
+# 03CZT8向け実測済みクロップパラメータ(monochro)。技術的前提3・3b参照。
+# 実データ(export_root/03CZT8-monochro)とのpixel-identical一致をテンプレートマッチング
+# (score=1.0000)で確認済み。既存の05CZT8向け(485,1250,overlap=60)とは異なる値。
+CROP_X0 = 655
+CROP_WIDTH = 950
+OVERLAP = 50
+
+# export_root（マージンなし）の train/good を train/val に分割する比率。
+# color.py の `int(0.8 * len(full_train_set))` と同一。pool_train_ratio(0.7) は
+# 流用しない（train/good は既に pool_train_ratio の 70% 出力であり、再度 0.7 を
+# 掛けるとプール比 49%/21% になる）。
+# @.kiro/specs/retraining/eval-calibration-leak-fixes.md 決定2
+TIGHT_TRAIN_RATIO = 0.8
+
+
+if os.name != 'nt':
+    # expandable_segments は Linux 限定 (Windows では非対応で警告が出るため抑制)
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
+# 後方互換: normalize_mode='none' の transform をモジュールレベルで提供
+default_transform = build_default_transform(normalize_mode='none')
+
+
+def get_pre_transform(cfg):
+    # retrain_app_CW では monochro 専用 sub_cfg は augmentation.monochro を持つ
+    # (build_sub_cfg(cfg, "monochro") で merge 後の構造)
+    aug = cfg.augmentation.get('monochro', cfg.augmentation.get('color', {}))
+    choices = [
+        transforms.ColorJitter(brightness=aug.get('ae_color_jitter_brightness', 0.2)),
+        transforms.ColorJitter(contrast=aug.get('ae_color_jitter_contrast', 0.2)),
+    ]
+    # saturation: monochro では 0 設定される想定。0 以外の場合のみ追加
+    sat = aug.get('ae_color_jitter_saturation', 0.0)
+    if sat > 0:
+        choices.append(transforms.ColorJitter(saturation=sat))
+    blur_kernel = aug.get('ae_gaussian_blur_kernel', 0)
+    if blur_kernel > 0:
+        choices.append(transforms.GaussianBlur(
+            kernel_size=blur_kernel,
+            sigma=(aug.get('ae_gaussian_blur_sigma_min', 0.1),
+                   aug.get('ae_gaussian_blur_sigma_max', 1.0))))
+    noise_std = aug.get('ae_gaussian_noise_std', 0.0)
+    if noise_std > 0:
+        choices.append(GaussianNoise(std=noise_std))
+    affine_degrees = aug.get('ae_random_affine_degrees', 0)
+    if affine_degrees > 0:
+        translate = tuple(aug.get('ae_random_affine_translate', [0.03, 0.03]))
+        choices.append(transforms.RandomAffine(degrees=affine_degrees, translate=translate))
+    return transforms.RandomChoice(choices)
+
+
+def _resolve_teacher_weights_path(cfg) -> str:
+    """Teacher 重みファイルの絶対パスを解決する (color と対称)。
+
+    cfg.teacher_weights が指定されていればそれを使い、
+    なければ cfg.pretraining_dir 配下の命名規約から自動推定する。
+    """
+    override = cfg.get('teacher_weights', None)
+    if override:
+        return override
+    pretraining_dir = cfg.get('pretraining_dir', './0_pretraining')
+    model_size = cfg.get('model_size', 'small')
+    backbone = cfg.get('backbone', 'wide_resnet101')
+    h = int(cfg.image_size_height)
+    w = int(cfg.image_size_width)
+    fname = f'{h}_{w}_teacher_{model_size}_monochro_{backbone}_final_state.pth'
+    return os.path.join(pretraining_dir, fname)
+
+
+class _FlatGoodImageFolder(Dataset):
+    """サブフォルダ無しの画像ディレクトリを読む Dataset。
+
+    export_root（マージンなし・crop/top-bottom分割・リサイズ済み）由来の
+    `dataset_path/{color}/monochro/{train/good, test/good/images}` はクラス別
+    サブフォルダを持たないフラット構成のため、`ImageFolderWithoutTarget`
+    （torchvision `ImageFolder` 前提＝`root/{class}/*.jpg`）は使えない。
+    """
+
+    _EXTENSIONS = ('.bmp', '.png', '.jpg', '.jpeg', '.tiff')
+
+    def __init__(self, root, transform=None):
+        self.root = root
+        self.transform = transform
+        self.samples = sorted(
+            os.path.join(root, f) for f in os.listdir(root)
+            if f.lower().endswith(self._EXTENSIONS)
+        )
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, index):
+        image = Image.open(self.samples[index]).convert('RGB')
+        if self.transform is not None:
+            return self.transform(image)
+        return image
+
+
+def _resolve_margin_good_root(cfg, color_num: str) -> str | None:
+    """マージンあり画像（`export_root_margin`）の good カテゴリ画像ルートを解決する。
+
+    `dataset_id_monochro_margin` が空、または `metadata.json`/`binary` が見つからない
+    場合は None を返す（マージンなし学習へのフォールバック）。
+    on_class='0'（good）かつ invalid_flg!='1' のカテゴリのみ対象とし、monochro は
+    単一 good カテゴリを前提とする（複数見つかった場合は明確なエラーとする）。
+    """
+    margin_export_root = cfg.get('margin_export_root', '')
+    dataset_id = cfg.get('dataset_id_monochro_margin', '')
+    if not margin_export_root or not dataset_id:
+        return None
+
+    ds_dir = os.path.join(str(margin_export_root), str(dataset_id))
+    metadata_path = os.path.join(ds_dir, 'metadata.json')
+    if not os.path.isfile(metadata_path):
+        return None
+
+    with open(metadata_path, 'r', encoding='utf-8') as f:
+        metadata = json.load(f)
+    good_category_ids = [
+        c['category_id'] for c in metadata.get('category', [])
+        if c.get('on_class') == '0' and c.get('invalid_flg') != '1'
+    ]
+
+    binary_dir = os.path.join(ds_dir, 'binary', color_num)
+    good_dirs = [
+        os.path.join(binary_dir, cid) for cid in good_category_ids
+        if os.path.isdir(os.path.join(binary_dir, cid))
+    ]
+    if not good_dirs:
+        return None
+    if len(good_dirs) > 1:
+        raise ValueError(
+            f'マージンあり画像のgoodカテゴリが複数見つかりました: {good_dirs}'
+            '（monochroは単一goodカテゴリを前提としています）'
+        )
+    return good_dirs[0]
+
+
+_MARGIN_CACHE_EXTENSIONS = ('.bmp', '.png', '.jpg', '.jpeg', '.tiff')
+
+
+def _sync_margin_cache(margin_root: str, cache_dir: str) -> str:
+    """`margin_root`（ネットワーク共有上のraw画像ディレクトリ）を`cache_dir`へ一括コピーする。
+
+    `RawShiftImageFolder`系のDatasetが学習エポック毎に`margin_root`へ都度アクセスすると
+    ネットワーク帯域がボトルネックになるため、1回のパイプライン実行の間だけ有効な
+    ローカルコピーを作る。差分同期・世代管理は行わず、コピー前に`cache_dir`を必ず空にする。
+    """
+    if os.path.isdir(cache_dir):
+        shutil.rmtree(cache_dir)
+    os.makedirs(cache_dir, exist_ok=True)
+
+    n_copied = 0
+    for dirpath, _, filenames in os.walk(margin_root):
+        rel = os.path.relpath(dirpath, margin_root)
+        dst_dir = cache_dir if rel == '.' else os.path.join(cache_dir, rel)
+        for fn in filenames:
+            if not fn.lower().endswith(_MARGIN_CACHE_EXTENSIONS):
+                continue
+            os.makedirs(dst_dir, exist_ok=True)
+            shutil.copy2(os.path.join(dirpath, fn), os.path.join(dst_dir, fn))
+            n_copied += 1
+
+    print(f'[raw_shift_cache] {margin_root} → {cache_dir} へ {n_copied}枚をローカルキャッシュ')
+    return cache_dir
+
+
+def _split_tight_good(train_good_dir, train_tf, seed):
+    """export_root（マージンなし）の `train/good` を撮像単位で train/val に分割する。
+
+    `test/good` は評価専用の held-out とし、学習・較正には一切参照しない。
+    同一撮影の top/bottom が train と val に分かれないよう、分割は撮像単位で行う。
+    """
+    full = _FlatGoodImageFolder(train_good_dir, transform=train_tf)
+    index_of = {os.path.basename(p): i for i, p in enumerate(full.samples)}
+    train_names, val_names = split_files_by_product(
+        list(index_of.keys()), train_ratio=TIGHT_TRAIN_RATIO, seed=seed)
+    train_set = torch.utils.data.Subset(full, [index_of[n] for n in train_names])
+    validation_set = torch.utils.data.Subset(full, [index_of[n] for n in val_names])
+    return train_set, validation_set
+
+
+def _split_margin_by_file(margin_train_full, margin_val_full, pool_train_ratio, seed):
+    """マージンあり画像を**ファイル（撮像）単位**で train/val に分割する。
+
+    同一raw画像のtop/bottomがtrain/valに分かれると較正セットがtrainから独立しなくなるため、
+    ファイル単位で分割してから展開する。
+    """
+    n_files = len(margin_train_full.paths)
+    samples_per_file = len(margin_train_full) // n_files
+    rng = torch.Generator().manual_seed(seed)
+    file_perm = torch.randperm(n_files, generator=rng).tolist()
+    n_train_files = int(pool_train_ratio * n_files)
+
+    def _expand(file_indices):
+        return [i * samples_per_file + h
+                for i in file_indices for h in range(samples_per_file)]
+
+    margin_train_set = torch.utils.data.Subset(
+        margin_train_full, _expand(file_perm[:n_train_files]))
+    margin_val_set = torch.utils.data.Subset(
+        margin_val_full, _expand(file_perm[n_train_files:]))
+    return margin_train_set, margin_val_set
+
+
+def _build_datasets(
+    cfg, dataset_path: str, color_num: str, train_tf,
+    use_raw_shift: bool, crop_shift_max_px: int,
+    image_size_width: int, image_size_height: int, seed: int,
+    crop_x0: int, crop_width: int, overlap: int,
+):
+    """train/validation/full_train の Dataset を構築する（DataLoader構築部分）。
+
+    コピー元(`train/monochro.py`の`_build_datasets`)との差分は、
+    `Item03CZT8RawShiftImageFolder`に`crop_x0`/`crop_width`/`overlap`を渡す点のみ。
+    """
+    if use_raw_shift:
+        # test/good は評価専用の held-out とし、学習・較正には参照しない。
+        tight_train_good = os.path.join(dataset_path, 'train', 'good')
+        tight_train_set, tight_validation_set = _split_tight_good(
+            tight_train_good, train_tf=train_tf, seed=seed)
+
+        margin_root = _resolve_margin_good_root(cfg, color_num)
+        if margin_root is not None:
+            pool_train_ratio = float(cfg.get('pool_train_ratio', 0.7))
+            print(
+                f'[raw_shift_dataset] マージンあり画像から random crop_offset '
+                f'(±{crop_shift_max_px} px) で学習 (pool_train_ratio={pool_train_ratio}): {margin_root}'
+            )
+            cache_dir = cfg.get('raw_shift_cache_dir', f'./_cache_{color_num}/raw_shift_margin')
+            margin_read_root = _sync_margin_cache(margin_root, cache_dir)
+            # train用 (シフトあり) と val用 (offset=0固定) を同じ画像リストから作り、
+            # 後段でファイル(撮像)単位に分割する。
+            margin_train_full = Item03CZT8RawShiftImageFolder(
+                raw_root=margin_read_root, mode='monochro',
+                image_size_width=image_size_width,
+                image_size_height=image_size_height,
+                crop_x0=crop_x0, crop_width=crop_width, overlap=overlap,
+                crop_shift_max_px=crop_shift_max_px,
+                transform=train_tf,
+                seed=seed,
+            )
+            margin_val_full = Item03CZT8RawShiftImageFolder(
+                raw_root=margin_read_root, mode='monochro',
+                image_size_width=image_size_width,
+                image_size_height=image_size_height,
+                crop_x0=crop_x0, crop_width=crop_width, overlap=overlap,
+                crop_shift_max_px=0,
+                transform=train_tf,
+                seed=seed,
+            )
+            # 分割はファイル(撮像)単位。同一 raw 画像の top/bottom を train と val に
+            # 分けないため。
+            margin_train_set, margin_val_set = _split_margin_by_file(
+                margin_train_full, margin_val_full, pool_train_ratio, seed)
+            train_set = torch.utils.data.ConcatDataset([margin_train_set, tight_train_set])
+            validation_set = torch.utils.data.ConcatDataset([margin_val_set, tight_validation_set])
+        else:
+            print(
+                '[raw_shift_dataset] マージンあり画像が見つからないため、'
+                'export_root（マージンなし）のみで学習します'
+            )
+            train_set = tight_train_set
+            validation_set = tight_validation_set
+        # 後続コード (teacher_normalization, train_step 計算等) は len(full_train_set) を参照するため保持
+        full_train_set = train_set
+    else:
+        full_train_set = ImageFolderWithoutTarget(
+            os.path.join(dataset_path, 'train'),
+            transform=train_tf)
+        train_size = int(0.8 * len(full_train_set))
+        validation_size = len(full_train_set) - train_size
+        rng = torch.Generator().manual_seed(seed)
+        train_set, validation_set = torch.utils.data.random_split(
+            full_train_set, [train_size, validation_size], rng)
+    return train_set, validation_set, full_train_set
+
+
+def train_monochro(cfg: DictConfig, mgr=None):
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+
+    image_size_height = int(cfg.image_size_height)
+    image_size_width = int(cfg.image_size_width)
+
+    edge_mask_w = int(cfg.get('edge_mask_w', 0))
+    if edge_mask_w > 0:
+        print(f'[edge_mask_w={edge_mask_w}] 両端マスクを loss / quantile / threshold 計算から除外')
+
+    # normalize_mode 解決 (後方互換: per_image_minmax=true → 'min_max')
+    normalize_mode = resolve_normalize_mode({
+        'normalize_mode': cfg.get('normalize_mode', None),
+        'per_image_minmax': cfg.get('per_image_minmax', False),
+    })
+    target_mean = cfg.get('normalize_target_mean', None)
+    target_std = cfg.get('normalize_target_std', None)
+    if normalize_mode != 'none':
+        print(f'[normalize_mode={normalize_mode}] 画像ごとの正規化を適用'
+              + (f' (target_mean={target_mean}, target_std={target_std})'
+                 if normalize_mode == 'mean_std' else ''))
+    active_transform = build_default_transform(
+        normalize_mode=normalize_mode,
+        target_mean=list(target_mean) if target_mean is not None else None,
+        target_std=list(target_std) if target_std is not None else None)
+
+    output_dir = cfg.model_dir
+
+    scaler = GradScaler(device='cuda')
+
+    # monochro 専用: {model_dir}/{target_color}/{monochro_subdir}/ に保存
+    monochro_subdir = cfg.get('monochro_subdir', 'monochro')
+    train_output_dir = os.path.join(output_dir, str(cfg.target_color), monochro_subdir)
+
+    gpu_id = int(cfg.get('gpu_id', 0))
+    device = torch.device(f'cuda:{gpu_id}' if torch.cuda.is_available() else 'cpu')
+
+    os.makedirs(train_output_dir, exist_ok=True)
+
+    dataset_dir_path = cfg.dataset_path
+    color_num = str(cfg.target_color)
+    # monochro 専用: {dataset_path}/{target_color}/{monochro_subdir}/ を参照
+    dataset_path = os.path.join(dataset_dir_path, color_num, monochro_subdir)
+
+    pretrain_penalty = True
+
+    pre_tf = get_pre_transform(cfg)
+    st_tf = get_st_transform(cfg)
+    train_tf = TrainTransform(pre_tf, active_transform, st_tf=st_tf)
+
+    # raw 画像から random crop offset で前処理する augmentation を使うか判定。
+    use_raw_shift = bool(cfg.get('use_raw_shift_dataset', False))
+    crop_shift_max_px = int(cfg.get('crop_shift_max_px', 0))
+
+    train_set, validation_set, full_train_set = _build_datasets(
+        cfg, dataset_path, color_num, train_tf,
+        use_raw_shift=use_raw_shift,
+        crop_shift_max_px=crop_shift_max_px,
+        image_size_width=image_size_width,
+        image_size_height=image_size_height,
+        seed=seed,
+        crop_x0=CROP_X0, crop_width=CROP_WIDTH, overlap=OVERLAP,
+    )
+
+    _nw = int(cfg.get('num_workers', 4))
+    _pw = bool(cfg.get('persistent_workers', False)) and _nw > 0
+    train_loader = DataLoader(train_set, batch_size=cfg.batch_size, shuffle=True,
+                              num_workers=_nw, pin_memory=True, persistent_workers=_pw)
+    validation_loader = DataLoader(validation_set, batch_size=cfg.batch_size)
+
+    train_loader_infinite = InfiniteDataloader(train_loader)
+
+    if pretrain_penalty:
+        pen_aug = cfg.get('penalty_augmentation', {})
+        penalty_transform_list = [
+            transforms.Resize((2 * image_size_height, 2 * image_size_width)),
+            # monochro: grayscale_p=1.0 で OOD も常時 grayscale 化 (config 側で指定)
+            transforms.RandomGrayscale(pen_aug.get('grayscale_p', 1.0)),
+            transforms.RandomCrop((image_size_height, image_size_width)),
+        ]
+        if pen_aug.get('horizontal_flip', True):
+            penalty_transform_list.append(transforms.RandomHorizontalFlip())
+        if pen_aug.get('color_jitter_brightness', 0.2) > 0 or \
+                pen_aug.get('color_jitter_contrast', 0.2) > 0 or \
+                pen_aug.get('color_jitter_saturation', 0.0) > 0:
+            penalty_transform_list.append(transforms.ColorJitter(
+                brightness=pen_aug.get('color_jitter_brightness', 0.2),
+                contrast=pen_aug.get('color_jitter_contrast', 0.2),
+                saturation=pen_aug.get('color_jitter_saturation', 0.0)))
+        # ToTensor + 正規化 (active_transform と同じ正規化モードを後段に適用)
+        penalty_transform_list.append(transforms.ToTensor())
+        from utils.transforms import PerImageMinMax, PerImageMeanStd
+        if normalize_mode == 'min_max':
+            penalty_transform_list.append(PerImageMinMax())
+            penalty_transform_list.append(transforms.Normalize(
+                mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
+        elif normalize_mode == 'mean_std':
+            penalty_transform_list.append(PerImageMeanStd(
+                target_mean=list(target_mean) if target_mean is not None else None,
+                target_std=list(target_std) if target_std is not None else None))
+        else:  # 'none'
+            penalty_transform_list.append(transforms.Normalize(
+                mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
+        if pen_aug.get('random_erasing_p', 0.1) > 0:
+            penalty_transform_list.append(transforms.RandomErasing(
+                p=pen_aug.get('random_erasing_p', 0.1),
+                scale=(0.02, 0.15)))
+        penalty_transform = transforms.Compose(penalty_transform_list)
+        penalty_set = ImageFolderWithoutTarget(cfg.imagenet_train_path,
+                                               transform=penalty_transform)
+        penalty_loader = DataLoader(penalty_set, batch_size=cfg.batch_size, shuffle=True,
+                                    num_workers=_nw, pin_memory=True, persistent_workers=_pw)
+        penalty_loader_infinite = InfiniteDataloader(penalty_loader)
+        print(f"The size of training_set is {len(full_train_set)}.")
+        print(f"The size of penalty_set is {len(penalty_set)}.")
+    else:
+        penalty_loader_infinite = itertools.repeat(None)
+
+    pdn_dropout = cfg.get('pdn_dropout', 0.0)
+    if cfg.model_size == "small":
+        teacher = get_pdn_small(out_channels, dropout_rate=pdn_dropout)
+        student = get_pdn_small(2 * out_channels, dropout_rate=pdn_dropout)
+    elif cfg.model_size == "medium":
+        teacher = get_pdn_medium(out_channels, dropout_rate=pdn_dropout)
+        student = get_pdn_medium(2 * out_channels, dropout_rate=pdn_dropout)
+
+    weights_path = _resolve_teacher_weights_path(cfg)
+    print(f'Teacher 重み: {weights_path}')
+    state_dict = torch.load(weights_path, map_location='cpu', weights_only=True)
+    # 旧 PDN (Dropout なし、最終 Conv が index 8) → 現行 PDN (index 9) のキー読み替え
+    if '8.weight' in state_dict and '9.weight' not in state_dict:
+        state_dict = {(('9' + k[1:]) if k.startswith('8.') else k): v for k, v in state_dict.items()}
+    teacher.load_state_dict(state_dict)
+    autoencoder = get_autoencoder(out_channels,
+                                  image_size_height=image_size_height,
+                                  image_size_width=image_size_width)
+
+    teacher.eval()
+    student.train()
+    autoencoder.train()
+
+    if on_gpu:
+        teacher.to(device)
+        student.to(device)
+        autoencoder.to(device)
+
+    best_val_loss = float('inf')
+    val_patience_counter = 0
+
+    train_dataset_size = len(full_train_set)
+    iterations_per_epoch = train_dataset_size // cfg.batch_size
+    cfg.train_step = iterations_per_epoch * cfg.epochs
+
+    # 学習 step の上限キャップ (データ増加時の線形増加を抑制、過学習回避)
+    max_train_step = cfg.get('max_train_step', None)
+    if max_train_step is not None and cfg.train_step > max_train_step:
+        print(f'[max_train_step] epochs={cfg.epochs} × iter/epoch={iterations_per_epoch} = {cfg.train_step} step を {max_train_step} step にキャップ')
+        cfg.train_step = max_train_step
+
+    # val_interval: cfg.val_interval があればそれを使い、無ければ len(train_loader) (1 epoch 毎)
+    cfg_val_interval = cfg.get('val_interval', None)
+    val_interval = int(cfg_val_interval) if cfg_val_interval else len(train_loader)
+    print(f'[val_interval={val_interval}] {val_interval} step ごとに validation 実行')
+
+    teacher_mean, teacher_std = teacher_normalization(teacher, train_loader)
+
+    optimizer = torch.optim.AdamW(itertools.chain(student.parameters(),
+                                                  autoencoder.parameters()),
+                                  lr=cfg.model.lr, weight_decay=cfg.model.weight_decay)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.train_step)
+
+    mlflow_log_interval = cfg.get('mlflow', {}).get('log', {}).get('train_step_interval', 500)
+
+    tqdm_obj = tqdm(range(cfg.train_step))
+    for iteration, (image_st, image_ae), image_penalty in zip(
+            tqdm_obj, train_loader_infinite, penalty_loader_infinite):
+        optimizer.zero_grad()
+        with autocast("cuda"):
+            if on_gpu:
+                image_st = image_st.to(device)
+                image_ae = image_ae.to(device)
+                if image_penalty is not None:
+                    image_penalty = image_penalty.to(device)
+
+            with torch.no_grad():
+                teacher_output_st = teacher(image_st)
+                teacher_output_st = (teacher_output_st - teacher_mean) / teacher_std
+            student_output_st = student(image_st)[:, :out_channels]
+
+            distance_st = (teacher_output_st - student_output_st) ** 2
+            # 両端 padding artifact を loss/quantile/threshold から除外。
+            distance_st_masked = slice_edge_excluded(distance_st, edge_mask_w)
+
+            loss_type = cfg.get('st_loss_type', 'hard')
+            if loss_type == 'focal':
+                focal_gamma = cfg.get('focal_gamma', 2.0)
+                loss_hard = focal_feature_loss(distance_st_masked, gamma=focal_gamma)
+            else:
+                flat = distance_st_masked.flatten()
+                max_elements = 100_000
+                if flat.numel() > max_elements:
+                    indices = torch.randperm(flat.numel(), device=flat.device)[:max_elements]
+                    flat = flat[indices]
+                d_hard = torch.quantile(flat, q=cfg.get('hard_mining_quantile', 0.999))
+                loss_hard = torch.mean(distance_st_masked[distance_st_masked >= d_hard])
+
+            del teacher_output_st, student_output_st, distance_st, distance_st_masked
+
+            if image_penalty is not None:
+                student_output_penalty = student(image_penalty)[:, :out_channels]
+                loss_penalty = torch.mean(student_output_penalty ** 2)
+                penalty_weight = cfg.get('penalty_weight', 1.0)
+                loss_st = loss_hard + penalty_weight * loss_penalty
+            else:
+                loss_st = loss_hard
+
+            with torch.no_grad():
+                teacher_output_ae = teacher(image_ae)
+                teacher_output_ae = (teacher_output_ae - teacher_mean) / teacher_std
+
+            ae_output = autoencoder(image_ae)
+            student_output_ae = student(image_ae)[:, out_channels:]
+
+            distance_ae = (teacher_output_ae - ae_output) ** 2
+            distance_stae = (ae_output - student_output_ae) ** 2
+            loss_ae = torch.mean(slice_edge_excluded(distance_ae, edge_mask_w))
+            loss_stae = torch.mean(slice_edge_excluded(distance_stae, edge_mask_w))
+            loss_total = cfg.loss_st * loss_st + cfg.loss_ae * loss_ae + cfg.loss_stae * loss_stae
+
+        scaler.scale(loss_total).backward()
+        scaler.step(optimizer)
+        scaler.update()
+        scheduler.step()
+
+        if iteration % 10 == 0:
+            tqdm_obj.set_description("Current loss: {:.4f}  ".format(loss_total.item()))
+
+        if mgr is not None and mlflow_log_interval > 0 and iteration % mlflow_log_interval == 0:
+            step_metrics = {'train_loss_total': loss_total.item(),
+                            'train_loss_st': loss_st.item(),
+                            'train_loss_ae': loss_ae.item()}
+            if image_penalty is not None:
+                step_metrics['train_loss_penalty'] = loss_penalty.item()
+            mgr.log_metrics(step_metrics, step=iteration)
+
+        if iteration % val_interval == 0:
+            val_loss = evaluate_validation_loss(validation_loader, teacher, student,
+                                                autoencoder, teacher_mean, teacher_std,
+                                                device, cfg)
+            print(f"Validation Loss: {val_loss:.4f}")
+
+            if mgr is not None:
+                mgr.log_metrics({'val_loss': val_loss}, step=iteration)
+
+            q_st_start, q_st_end, q_ae_start, q_ae_end = map_normalization(
+                validation_loader=validation_loader, teacher=teacher,
+                student=student, autoencoder=autoencoder,
+                teacher_mean=teacher_mean, teacher_std=teacher_std,
+                st_para=cfg.map_st, ae_para=cfg.map_ae,
+                desc='Intermediate map normalization',
+                edge_mask_w=edge_mask_w)
+
+            min_delta = float(cfg.get('early_stop_min_delta', 0.0))
+            meaningful_improved = val_loss < (best_val_loss - min_delta)
+
+            if meaningful_improved:
+                best_val_loss = val_loss
+                val_patience_counter = 0
+                torch.save(teacher.state_dict(), os.path.join(train_output_dir, 'teacher_state_best.pth'))
+                torch.save(student.state_dict(), os.path.join(train_output_dir, 'student_state_best.pth'))
+                torch.save(autoencoder.state_dict(), os.path.join(train_output_dir, 'autoencoder_state_best.pth'))
+
+                q_st_start_l = [q_st_start.cpu().detach().numpy().copy()]
+                q_st_end_l = [q_st_end.cpu().detach().numpy().copy()]
+                q_ae_start_l = [q_ae_start.cpu().detach().numpy().copy()]
+                q_ae_end_l = [q_ae_end.cpu().detach().numpy().copy()]
+                teacher_mean_l = [teacher_mean.cpu().detach().numpy().copy()]
+                teacher_std_l = [teacher_std.cpu().detach().numpy().copy()]
+
+                para_json = {
+                    'q_st_start': q_st_start_l, 'q_st_end': q_st_end_l,
+                    'q_ae_start': q_ae_start_l, 'q_ae_end': q_ae_end_l,
+                    'teacher_mean': teacher_mean_l, 'teacher_std': teacher_std_l,
+                    'image_size_height': int(image_size_height),
+                    'image_size_width': int(image_size_width),
+                }
+                with open(os.path.join(train_output_dir, 'para.json'), 'w', encoding='utf-8') as para_file:
+                    json.dump(para_json, para_file, indent=4, default=numpy_encoder, ensure_ascii=False)
+
+            else:
+                val_patience_counter += 1
+                if val_patience_counter >= cfg.early_stop_patience:
+                    print(f"Early stopping triggered based on validation loss (min_delta={min_delta}).")
+                    if mgr is not None:
+                        mgr.log_metrics({'early_stop_step': iteration}, step=iteration)
+                    break
+
+            teacher.eval()
+            student.train()
+            autoencoder.train()
+
+            del image_st, image_ae, image_penalty
+            del teacher_output_ae, student_output_ae, ae_output
+            del distance_ae, distance_stae, loss_ae, loss_stae, loss_total
+            torch.cuda.empty_cache()
+
+    teacher.eval()
+    student.eval()
+    autoencoder.eval()
+
+    teacher.load_state_dict(torch.load(os.path.join(train_output_dir, 'teacher_state_best.pth'), weights_only=True))
+    student.load_state_dict(torch.load(os.path.join(train_output_dir, 'student_state_best.pth'), weights_only=True))
+    autoencoder.load_state_dict(torch.load(os.path.join(train_output_dir, 'autoencoder_state_best.pth'), weights_only=True))
+
+    # raw_shift モード時: teacher_mean/std を推論時分布 (shift=0) で再計算して上書きする。
+    if use_raw_shift:
+        print('[teacher_renormalization] 推論時分布 (shift=0) で teacher_mean/std を再計算 (channel_weights / threshold 用)')
+        teacher_mean, teacher_std = teacher_normalization(teacher, validation_loader)
+
+    # Channel Weights 計算
+    channel_weights_tensor = None
+    channel_weights_info = {}
+    cw_cfg = cfg.get('channel_weights', None)
+    if cw_cfg is not None and cw_cfg.get('enabled', False):
+        cw_kwargs = dict(
+            supervised_power=cw_cfg.get('supervised_power', 10),
+            unsupervised_power=cw_cfg.get('unsupervised_power', 7),
+            blend_n_mid=cw_cfg.get('blend_n_mid', 30),
+            blend_scale=cw_cfg.get('blend_scale', 10.0),
+            max_fpr=cw_cfg.get('max_fpr', 0.05))
+        train_path = os.path.join(dataset_path, 'train')
+        cw_defect_path = os.path.join(train_path, 'defect')
+        if use_raw_shift:
+            # defect が無い場合 compute_channel_weights は unsupervised に degrade する
+            # (03CZT8は現時点でdefectサンプルが無いため、この経路になる想定)。
+            weights_np, cw_method, ch_aucs, w_sup = compute_channel_weights(
+                teacher, student, teacher_mean, teacher_std, None, device,
+                good_dataset=validation_set, defect_path=cw_defect_path, **cw_kwargs)
+        else:
+            _cw_good = os.path.join(train_path, 'good')
+            if not (os.path.isdir(_cw_good)
+                    and any(f.lower().endswith('.bmp') for f in os.listdir(_cw_good))):
+                raise FileNotFoundError(
+                    f"[monochro] channel_weights に必要な前処理済データがありません: {_cw_good}\n"
+                    f"  → 先に split_pool_to_dataset('{color_num}', mode='monochro') を実行してください。")
+            weights_np, cw_method, ch_aucs, w_sup = compute_channel_weights(
+                teacher, student, teacher_mean, teacher_std, train_path, device, **cw_kwargs)
+        channel_weights_tensor = torch.from_numpy(weights_np).float().to(device)
+        channel_weights_tensor = channel_weights_tensor[None, :, None, None]
+        channel_weights_info['channel_weights'] = weights_np.tolist()
+        channel_weights_info['channel_weights_method'] = cw_method
+        channel_weights_info['blend_w_sup'] = float(w_sup)
+        if ch_aucs is not None:
+            channel_weights_info['channel_aucs'] = ch_aucs.tolist()
+        print(f'チャネル重み計算完了 (方式: {cw_method}, w_sup={w_sup:.4f})')
+
+    q_st_start, q_st_end, q_ae_start, q_ae_end = map_normalization(
+        validation_loader=validation_loader, teacher=teacher, student=student,
+        autoencoder=autoencoder, teacher_mean=teacher_mean,
+        st_para=cfg.map_st, ae_para=cfg.map_ae, teacher_std=teacher_std,
+        desc='Final map normalization',
+        channel_weights=channel_weights_tensor,
+        edge_mask_w=edge_mask_w)
+
+    q_st_start_l = [q_st_start.cpu().detach().numpy().copy()]
+    q_st_end_l = [q_st_end.cpu().detach().numpy().copy()]
+    q_ae_start_l = [q_ae_start.cpu().detach().numpy().copy()]
+    q_ae_end_l = [q_ae_end.cpu().detach().numpy().copy()]
+    teacher_mean_l = [teacher_mean.cpu().detach().numpy().copy()]
+    teacher_std_l = [teacher_std.cpu().detach().numpy().copy()]
+
+    best_st, best_ae = cfg.map_st, cfg.map_ae
+
+    teacher_mean_4d = teacher_mean.squeeze().cpu().detach().numpy()
+    teacher_std_4d = teacher_std.squeeze().cpu().detach().numpy()
+
+    para_json = {
+        'q_st_start': q_st_start_l, 'q_st_end': q_st_end_l,
+        'q_ae_start': q_ae_start_l, 'q_ae_end': q_ae_end_l,
+        'teacher_mean': teacher_mean_l, 'teacher_std': teacher_std_l,
+        'teacher_mean_1d': teacher_mean_4d.tolist(),
+        'teacher_std_1d': teacher_std_4d.tolist(),
+        'st_para': best_st, 'ae_para': best_ae,
+        'image_size_height': int(image_size_height),
+        'image_size_width': int(image_size_width),
+        'edge_mask_w': edge_mask_w,
+        'normalize_mode': normalize_mode,
+        'per_image_minmax': normalize_mode == 'min_max',
+    }
+    if normalize_mode == 'mean_std':
+        para_json['normalize_target_mean'] = (
+            list(target_mean) if target_mean is not None else None)
+        para_json['normalize_target_std'] = (
+            list(target_std) if target_std is not None else None)
+    para_json.update(channel_weights_info)
+
+    # F1 最大化閾値の計算 (validation set から)
+    print('閾値計算中...')
+    scores_val = []
+    cand1_maps = []
+    for image, _ in tqdm(validation_loader, desc='Computing threshold scores'):
+        if on_gpu:
+            image = image.to(device)
+        teacher_output = teacher(image)
+        teacher_output = (teacher_output - teacher_mean) / teacher_std
+        student_output = student(image)
+        diff_st = (teacher_output - student_output[:, :out_channels]) ** 2
+        if channel_weights_tensor is not None:
+            map_st = torch.sum(diff_st * channel_weights_tensor, dim=1, keepdim=True)
+        else:
+            map_st = torch.mean(diff_st, dim=1, keepdim=True)
+        if q_st_start is not None:
+            map_st = 0.1 * (map_st - q_st_start) / (q_st_end - q_st_start)
+        unsliced_scored_map = best_st * map_st
+        scored_map = slice_edge_excluded(unsliced_scored_map, edge_mask_w)
+        score = scored_map.max().item()
+        scores_val.append(score)
+        cand1_map = apply_edge_mask_zero(unsliced_scored_map, edge_mask_w)
+        for b in range(cand1_map.shape[0]):
+            cand1_maps.append(cand1_map[b, 0].detach().cpu().numpy())
+
+    scores_np = np.array(scores_val)
+    threshold_val = float(np.quantile(scores_np, 0.995))
+    para_json['threshold'] = threshold_val
+    print(f'閾値: {threshold_val:.6f} (validation 99.5パーセンタイル)')
+
+    # 候補1 (raw + z-score OR, monochro 専用) 較正: μ,σ,A,Z を算出して para に保存。
+    try:
+        from utils.candidate1_calib import (
+            compute_mu_sigma, raw_map_max, zscore_map_max, calib_AZ)
+        cand1_fpr = 1.0
+        c1cfg = cfg.get('candidate1', None) if hasattr(cfg, 'get') else None
+        if c1cfg is not None:
+            try:
+                cand1_fpr = float(c1cfg.get('fpr', 1.0))
+            except Exception:
+                cand1_fpr = 1.0
+        mu, sigma = compute_mu_sigma(cand1_maps)
+        raws_c = [raw_map_max(m) for m in cand1_maps]
+        zs_c = [zscore_map_max(m, mu, sigma) for m in cand1_maps]
+        A_c, Z_c = calib_AZ(raws_c, zs_c, fpr_pct=cand1_fpr)
+        para_json['cand1_enabled'] = True
+        para_json['cand1_mu'] = mu.tolist()
+        para_json['cand1_sigma'] = sigma.tolist()
+        para_json['cand1_A'] = float(A_c)
+        para_json['cand1_Z'] = float(Z_c)
+        para_json['cand1_T'] = 1.0
+        para_json['cand1_fpr'] = float(cand1_fpr)
+        print(f'候補1較正(monochro): A={A_c:.4f} Z={Z_c:.3f} '
+              f'(fpr={cand1_fpr}%, μσ shape={mu.shape})')
+    except Exception as e:
+        print(f'⚠️ 候補1較正に失敗 (raw のみで継続): {e}')
+
+    with open(os.path.join(train_output_dir, 'para.json'), 'w', encoding='utf-8') as para_file:
+        json.dump(para_json, para_file, indent=4, default=numpy_encoder, ensure_ascii=False)
+
+
+@torch.no_grad()
+def evaluate_validation_loss(validation_loader, teacher, student, autoencoder,
+                             teacher_mean, teacher_std, device, cfg):
+    """validation loss を集計する (monochro 専用)。"""
+    teacher.eval()
+    student.eval()
+    autoencoder.eval()
+
+    edge_mask_w = int(cfg.get('edge_mask_w', 0))
+
+    total_loss = 0
+    count = 0
+    for image, _ in validation_loader:
+        image = image.to(device)
+        teacher_output = teacher(image)
+        teacher_output = (teacher_output - teacher_mean) / teacher_std
+        student_output = student(image)
+        ae_output = autoencoder(image)
+
+        d_st = (teacher_output - student_output[:, :384]) ** 2
+        d_ae = (teacher_output - ae_output) ** 2
+        d_stae = (ae_output - student_output[:, 384:]) ** 2
+        loss_st = torch.mean(slice_edge_excluded(d_st, edge_mask_w))
+        loss_ae = torch.mean(slice_edge_excluded(d_ae, edge_mask_w))
+        loss_stae = torch.mean(slice_edge_excluded(d_stae, edge_mask_w))
+
+        loss_total = cfg.loss_st * loss_st + cfg.loss_ae * loss_ae + cfg.loss_stae * loss_stae
+        total_loss += loss_total.item()
+        count += 1
+
+    student.train()
+    autoencoder.train()
+    return total_loss / count
+
+
+if __name__ == '__main__':
+    import sys
+    from omegaconf import OmegaConf
+    config_path = os.path.join(os.path.dirname(__file__), 'conf_03czt8_monochro.yaml')
+    cli_args = sys.argv[1:]
+    cfg = OmegaConf.load(config_path)
+    cli_overrides = [arg for arg in cli_args if '=' in arg]
+    if cli_overrides:
+        cli_cfg = OmegaConf.from_dotlist(cli_overrides)
+        cfg = OmegaConf.merge(cfg, cli_cfg)
+    train_monochro(cfg)

@@ -152,6 +152,20 @@ training/                        # 既存学習パイプライン（pipline.py �
   診断された「R-B色味差」（ホワイトバランス/色温度ズレ）をR・Bチャネル個別ゲインで直接模擬。
   hue回転〔候補B〕とは異なるメカニズム）を追加承認した。候補A・B・Cのいずれについても、
   上記のゲート（非劣化・新設備一般化）を満たさない限り config.yaml への反映は行わない）
+  さらに例外: 新規サイズアイテム03CZT8向けのcrop/resizeパラメータ化に限り、
+  `training/utils/raw_shift_dataset.py`の`RawShiftImageFolder`と同等の新規クラス
+  （`Item03CZT8RawShiftImageFolder`、`training/train/item_03czt8/margin_dataset.py`に新規追加）
+  を承認済み（@.kiro/specs/retraining/new-item-03czt8-model-creation.md、2026-09-25）。
+  既存の`RawShiftImageFolder`自体は無変更のまま。`training/utils/image_preprocessing.py`への
+  新規関数追加（同様に`training/train/item_03czt8/preprocessing.py`に新規実装）は既存決定12
+  （データ取得・選定前処理部分の例外化）の対象ファイルリスト内であり新規例外は不要と判断した。
+  `training/train/monochro.py`/`train/color.py`/`pipline.py`の学習ループ・オーケストレーションは
+  `training/train/item_03czt8/`配下に新規ファイルとしてコピーしており、既存ファイル自体への
+  変更は無い（損失関数・モデル構造・学習ループ本体は既存の`utils/common.py`等を無変更で
+  importして使用）。配置は`training/train/`配下（`training/tests/ci_gates/test_training_boundary.py`
+  のアーキテクチャ境界CI gate＝`train.common`直接importは`train`パッケージ内限定、に準拠するため。
+  `items/`配下では同gateに抵触することが実測で判明し移動した）。color側の学習ロジックは
+  対象外・変更不可のまま。
 - spec と実装が食い違ったとき、**spec を直さずコードを優先**すること
 
 ---
