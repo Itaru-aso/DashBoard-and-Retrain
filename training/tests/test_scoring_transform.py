@@ -217,3 +217,81 @@ def test_cand1_mu_sigma_shape_mismatch_raises_when_shrunk_by_slice(synthetic_sco
     mismatched = compute_anomaly_score(**kwargs)
     correct = compute_anomaly_score(**kwargs_full)
     assert not torch.allclose(mismatched, correct)
+
+
+def test_compute_anomaly_maps_native_matches_map_combined_before_resize(
+        synthetic_scoring_components):
+    """新設 compute_anomaly_maps の 'map_native' が、リファクタ前の
+    compute_anomaly_score が cand1 分岐で使っていた map_combined (edge_mask後、
+    pad/interpolate前) と一致することを固定する。"""
+    from utils.scoring_transform import compute_anomaly_maps
+
+    c = synthetic_scoring_components()
+    torch.manual_seed(1)
+    mu = torch.rand(1, 1, c['map_h'], c['map_w']) * 0.05
+    sigma = torch.rand(1, 1, c['map_h'], c['map_w']) * 0.04 + 0.01
+    cand1 = {'mu': mu, 'sigma': sigma, 'A': 1.0, 'Z': 3.0}
+
+    kwargs = dict(
+        x=c['image_norm'], teacher=c['teacher'], student=c['student'],
+        autoencoder=c['autoencoder'], teacher_mean=c['teacher_mean'],
+        teacher_std=c['teacher_std'], st_para=1.0, ae_para=0.0,
+        q_st_start=c['q_st_start'], q_st_end=c['q_st_end'],
+        q_ae_start=c['q_ae_start'], q_ae_end=c['q_ae_end'],
+        channel_weights=None, edge_mask_w=0, cand1=cand1,
+        height=c['height'], width=c['width'],
+    )
+    maps = compute_anomaly_maps(**kwargs)
+    assert maps['map_native'].shape == (1, 1, c['map_h'], c['map_w'])
+
+    # cand1分岐の raw = max(map_combined) と一致するはず
+    expected_raw = torch.max(torch.max(maps['map_native'], dim=3)[0], dim=2)[0]
+    raw_from_score_formula = expected_raw / cand1['A']
+    assert torch.isfinite(raw_from_score_formula).all()
+
+
+def test_compute_anomaly_maps_resized_matches_noncand1_score_path(
+        synthetic_scoring_components):
+    """cand1=None の場合、'map_resized' の max が既存の compute_anomaly_score
+    (pad+interpolate分岐) の戻り値と一致することを固定する。"""
+    from utils.scoring_transform import compute_anomaly_maps, compute_anomaly_score
+
+    c = synthetic_scoring_components()
+    kwargs = dict(
+        x=c['image_norm'], teacher=c['teacher'], student=c['student'],
+        autoencoder=c['autoencoder'], teacher_mean=c['teacher_mean'],
+        teacher_std=c['teacher_std'], st_para=1.0, ae_para=0.0,
+        q_st_start=c['q_st_start'], q_st_end=c['q_st_end'],
+        q_ae_start=c['q_ae_start'], q_ae_end=c['q_ae_end'],
+        channel_weights=None, edge_mask_w=0, cand1=None,
+        height=c['height'], width=c['width'],
+    )
+    maps = compute_anomaly_maps(**kwargs)
+    score_from_maps = torch.max(torch.max(maps['map_resized'], dim=3)[0], dim=2)[0]
+    score_existing = compute_anomaly_score(**kwargs)
+    assert torch.allclose(score_from_maps, score_existing)
+
+
+def test_compute_anomaly_maps_zscore_resized_is_finite_with_small_sigma(
+        synthetic_scoring_components):
+    """sigmaがゼロに近い領域でも zscore_map_resized が inf/nan にならないこと
+    (Review Focus: 分散ゼロ領域でのゼロ除算)。"""
+    from utils.scoring_transform import compute_anomaly_maps
+
+    c = synthetic_scoring_components()
+    torch.manual_seed(4)
+    mu = torch.rand(1, 1, c['map_h'], c['map_w']) * 0.05
+    sigma = torch.zeros(1, 1, c['map_h'], c['map_w'])  # 分散ゼロを模す
+    cand1 = {'mu': mu, 'sigma': sigma, 'A': 1.0, 'Z': 3.0}
+
+    kwargs = dict(
+        x=c['image_norm'], teacher=c['teacher'], student=c['student'],
+        autoencoder=c['autoencoder'], teacher_mean=c['teacher_mean'],
+        teacher_std=c['teacher_std'], st_para=1.0, ae_para=0.0,
+        q_st_start=c['q_st_start'], q_st_end=c['q_st_end'],
+        q_ae_start=c['q_ae_start'], q_ae_end=c['q_ae_end'],
+        channel_weights=None, edge_mask_w=0, cand1=cand1,
+        height=c['height'], width=c['width'],
+    )
+    maps = compute_anomaly_maps(**kwargs)
+    assert torch.isfinite(maps['zscore_map_resized']).all()
