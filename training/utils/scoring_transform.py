@@ -38,6 +38,10 @@ def compute_anomaly_maps(
 ):
     """正規化済み画像テンソル x から、スカラーに還元する前の異常マップ群を計算する。
 
+    height/width は cand1 の有無に関わらず常に必須 (map_resized は cand1 有無に関わらず
+    計算されるため)。cand1 指定時、map_resized の計算により以前の早期return実装より
+    計算コストが増える (出力される anomaly score 自体への影響はない)。
+
     Returns:
         dict:
             'map_native': edge_mask後・pad/interpolate前のmap_combined (B,1,map_h,map_w)。
@@ -124,7 +128,8 @@ def compute_anomaly_score(
         cand1: None、または {'mu', 'sigma', 'A', 'Z'} を含む dict。
             Noneでない場合、統合スコア max(raw/A, z/Z) を
             元のグリッド(pad/interpolate前)上で計算して返す。
-        height/width: cand1=None の場合必須 (pad+interpolateの出力サイズ)。
+        height/width: 常に必須 (pad+interpolateの出力サイズ。cand1指定時も
+            compute_anomaly_maps内部でmap_resizedを計算するため必要)。
 
     Returns:
         Tensor shape (B, 1): 画像ごとの anomaly score。
