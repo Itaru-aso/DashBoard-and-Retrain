@@ -1,7 +1,9 @@
 """val/test 分割の作成・読み込み・管理モジュール"""
+import hashlib
 import json
 import os
 import random
+import re
 from collections import defaultdict
 
 
@@ -80,78 +82,71 @@ def load_split(split_path):
 
 def split_pool_to_train_test(defect_pool_path, good_pool_path, dataset_path,
                              train_ratio=0.7, seed=42):
-    """運用で蓄積した defect_pool/good_pool を train/test に振り分ける。
+    """運用で蓄積した defect_pool/good_pool を train/test に振り分け、dataset を pool に同期する。
 
-    既存の train/test データは保持し、pool のデータを追加する。
+    各撮像の行き先は撮像キーのハッシュで決まり、ほかの画像の有無に依存しない。pool が増えても
+    既存撮像の側は変わらない。良品・不良で同じ規則を使うため、片面だけ不良の撮像も良品面と不良面が
+    同じ側に入る。行き先と違う側にある画像と pool に無い画像は dataset から削除する（pool が無い・空の
+    クラスは削除しない）。
+    詳細は @.kiro/specs/retraining/pool-dataset-sync-split.md 決定1・2。
 
     Args:
         defect_pool_path: 蓄積された不良画像 (TP+FN) のディレクトリ
         good_pool_path: 蓄積された正常画像 (FP) のディレクトリ
         dataset_path: データセットルート (train/, test/ を含む)
-        train_ratio: train に振り分ける割合 (デフォルト 0.7)
-        seed: 乱数シード
+        train_ratio: 撮像が train に入る確率 (デフォルト 0.7。件数は期待値でありちょうどではない)
+        seed: ハッシュに混ぜるシード
 
     Returns:
-        dict: 振り分け結果 (移動先パスとファイル数)
+        dict: 振り分け結果 (追加枚数・削除枚数 `removed`・追加したファイルの移動元/先)
     """
     import shutil
 
-    rng = random.Random(seed)
     result = {'defect_to_train': 0, 'defect_to_test': 0,
-              'good_to_train': 0, 'good_to_test': 0, 'files': []}
+              'good_to_train': 0, 'good_to_test': 0, 'removed': 0, 'files': []}
 
-    # defect_pool → train/defect + test/defect/images
-    train_defect_dir = os.path.join(dataset_path, 'train', 'defect')
-    test_defect_dir = os.path.join(dataset_path, 'test', 'defect', 'images')
-    os.makedirs(train_defect_dir, exist_ok=True)
-    os.makedirs(test_defect_dir, exist_ok=True)
+    for pool_path, cls in ((defect_pool_path, 'defect'), (good_pool_path, 'good')):
+        train_dir = os.path.join(dataset_path, 'train', cls)
+        test_dir = os.path.join(dataset_path, 'test', cls, 'images')
+        train_key, test_key = f'{cls}_to_train', f'{cls}_to_test'
+        os.makedirs(train_dir, exist_ok=True)
+        os.makedirs(test_dir, exist_ok=True)
+        pool_files = set(_list_images(pool_path))
+        if not pool_files:
+            # pool が無い・空のクラスは dataset を空へ同期しない（パス誤り・dataset にだけある画像の保護）
+            continue
+        to_train = {f for f in pool_files if _is_train_capture(_capture_key(f), train_ratio, seed)}
+        wanted = {train_dir: to_train, test_dir: pool_files - to_train}
 
-    defect_files = _list_images(defect_pool_path) if os.path.isdir(defect_pool_path) else []
-    defect_groups = _group_by_product_id(defect_files)
-    group_ids = sorted(defect_groups.keys())
-    rng.shuffle(group_ids)
-    n_train_groups = max(1, round(len(group_ids) * train_ratio)) if group_ids else 0
-    train_group_ids = set(group_ids[:n_train_groups])
-
-    for gid, files in defect_groups.items():
-        dest_dir = train_defect_dir if gid in train_group_ids else test_defect_dir
-        for f in files:
-            src = os.path.join(defect_pool_path, f)
-            dst = os.path.join(dest_dir, f)
-            if not os.path.exists(dst):
-                shutil.copy2(src, dst)
-                if gid in train_group_ids:
-                    result['defect_to_train'] += 1
-                else:
-                    result['defect_to_test'] += 1
-                result['files'].append({'src': src, 'dst': dst})
-
-    # good_pool → train/good + test/good/images
-    train_good_dir = os.path.join(dataset_path, 'train', 'good')
-    test_good_dir = os.path.join(dataset_path, 'test', 'good', 'images')
-    os.makedirs(train_good_dir, exist_ok=True)
-    os.makedirs(test_good_dir, exist_ok=True)
-
-    # 良品も不良側と同様に「撮像単位」で振り分ける。同一撮影の top/bottom (`_0`/`_1`) が
-    # train と test に分かれると、評価・較正が学習データと相関してしまう。
-    # @.kiro/specs/retraining/eval-calibration-leak-fixes.md 決定3
-    good_files = _list_images(good_pool_path) if os.path.isdir(good_pool_path) else []
-    train_good_files, test_good_files = split_files_by_product(
-        good_files, train_ratio=train_ratio, seed=seed)
-
-    for files, dest_dir, count_key in (
-        (train_good_files, train_good_dir, 'good_to_train'),
-        (test_good_files, test_good_dir, 'good_to_test'),
-    ):
-        for f in files:
-            src = os.path.join(good_pool_path, f)
-            dst = os.path.join(dest_dir, f)
-            if not os.path.exists(dst):
-                shutil.copy2(src, dst)
-                result[count_key] += 1
-                result['files'].append({'src': src, 'dst': dst})
+        for dest_dir, files in wanted.items():
+            for f in _list_images(dest_dir):
+                if f not in files:
+                    os.remove(os.path.join(dest_dir, f))
+                    result['removed'] += 1
+            count_key = train_key if dest_dir == train_dir else test_key
+            for f in sorted(files):
+                src = os.path.join(pool_path, f)
+                dst = os.path.join(dest_dir, f)
+                if not os.path.exists(dst):
+                    shutil.copy2(src, dst)
+                    result[count_key] += 1
+                    result['files'].append({'src': src, 'dst': dst})
 
     return result
+
+
+def _capture_key(filename):
+    """撮像キー（`OK_`/`NG_` 接頭辞と末尾の面番号を除いた名前）を返す。
+
+    接頭辞は検査時の AI 判定であり良否クラスではないため、同一撮像の良品面と不良面で異なり得る。
+    """
+    return _extract_product_id(re.sub(r'^(OK|NG)_', '', filename))
+
+
+def _is_train_capture(capture_key, train_ratio, seed):
+    """撮像キーと seed のハッシュを [0,1) に写し、train_ratio 未満なら train とする。"""
+    digest = hashlib.md5(f'{seed}:{capture_key}'.encode('utf-8')).hexdigest()
+    return int(digest, 16) / 16 ** len(digest) < train_ratio
 
 
 def _list_images(directory):

@@ -59,18 +59,14 @@ def test_split_pool_to_dataset_produces_expected_file_lists(tmp_path):
     train_defect = sorted(os.listdir(dataset_path / "train" / "defect"))
     test_defect = sorted(os.listdir(dataset_path / "test" / "defect" / "images"))
 
-    # seed=42固定・train_ratio=0.7での実測値(既存コードを実行して記録した値)
-    assert train_good == [
-        "good_2_0.png", "good_3_0.png", "good_5_0.png",
-        "good_6_0.png", "good_7_0.png", "good_8_0.png", "good_9_0.png",
-    ]
-    assert test_good == ["good_0_0.png", "good_1_0.png", "good_4_0.png"]
-    assert train_defect == ["defect_1_0.png", "defect_2_0.png", "defect_3_0.png"]
-    assert test_defect == ["defect_0_0.png"]
-    assert result["defect_to_train"] == 3
-    assert result["defect_to_test"] == 1
-    assert result["good_to_train"] == 7
-    assert result["good_to_test"] == 3
+    # 分割はハッシュ方式（pool-dataset-sync-split.md 決定1）に変わったため、旧方式の実測リストは固定しない。
+    # cfg の pool/dataset パスが配線され、全画像がちょうど1回置かれ、報告件数と一致することを見る。
+    assert sorted(train_good + test_good) == sorted(os.listdir(good_pool))
+    assert sorted(train_defect + test_defect) == sorted(os.listdir(defect_pool))
+    assert result["good_to_train"] == len(train_good)
+    assert result["good_to_test"] == len(test_good)
+    assert result["defect_to_train"] == len(train_defect)
+    assert result["defect_to_test"] == len(test_defect)
 
 
 def test_backup_model_copies_model_dir(tmp_path):

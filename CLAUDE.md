@@ -166,6 +166,12 @@ training/                        # 既存学習パイプライン（pipline.py �
   のアーキテクチャ境界CI gate＝`train.common`直接importは`train`パッケージ内限定、に準拠するため。
   `items/`配下では同gateに抵触することが実測で判明し移動した）。color側の学習ロジックは
   対象外・変更不可のまま。
+  さらに例外: pool / dataset の同期化と撮像単位の安定分割に限り、`training/utils/split_manager.py` の
+  `split_pool_to_train_test`（撮像キーのハッシュによる train/test 振り分け・良品面と不良面の同側化・
+  dataset の pool への同期削除）と `training/dataset/manager.py` の `process_annotated_images`
+  （pool の export_root への同期削除）の改変を承認済み
+  （@.kiro/specs/retraining/pool-dataset-sync-split.md、2026-10-23）。`split_files_by_product`
+  （学習時の train/val 分割）と `create_split` は無変更のまま。
 - spec と実装が食い違ったとき、**spec を直さずコードを優先**すること
 
 ---
@@ -203,6 +209,7 @@ training/                        # 既存学習パイプライン（pipline.py �
 - `@.kiro/specs/retraining/eval-calibration-leak-fixes.md` | 評価・較正データリークの分析記録（S1〜S4は精度低下によりrevert済み・撤回経緯を含むADR）
 - `@.kiro/specs/retraining/monochro-margin-local-cache.md` | monochro margin画像の実行毎ローカル一時キャッシュ化（ネットワーク帯域ボトルネック対策・ADR）
 - `@.kiro/specs/retraining/color-saturation-drift-566.md` | 566番新設備の彩度/色味ドリフト対応（color ST側augmentation拡張検証。データ再学習は見送り・ADR）
+- `@.kiro/specs/retraining/pool-dataset-sync-split.md` | pool / dataset の同期化と撮像単位の安定分割（train/test 重複・付け替え未反映の解消・ADR）
 
 ### 資料の正・参照（`docs/reference/`）
 | ファイル | 概要 |

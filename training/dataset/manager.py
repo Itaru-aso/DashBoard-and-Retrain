@@ -9,6 +9,11 @@ import numpy as np
 from utils.image_preprocessing import load_image_as_byte_array
 from utils.split_manager import split_pool_to_train_test
 
+IMAGE_EXTENSIONS = ('.bmp', '.png', '.jpg', '.jpeg', '.tiff')
+# pool 同期で1クラスから消す枚数がこの比率と枚数を両方超えたら削除を止める（一覧の部分取得対策）
+POOL_SYNC_MAX_DELETE_RATIO = 0.2
+POOL_SYNC_MAX_DELETE_COUNT = 10
+
 
 class DatasetManager:
     def __init__(self, cfg):
@@ -99,10 +104,17 @@ class DatasetManager:
         リサイズ未適用のため、ここではファイル名正規化 (`_top`→`_0`、`_bottom`→`_1`) と
         リサイズ (config の image_size) のみを行う。
 
-        - monochro/good   → pool/{color}/monochro/good_pool/   (差分追加)
-        - monochro/defect → pool/{color}/monochro/defect_pool/ (差分追加)
-        - color/good      → pool/{color}/color/good_pool/      (差分追加)
-        - color/defect    → pool/{color}/color/defect_pool/    (差分追加)
+        - monochro/good   → pool/{color}/monochro/good_pool/   (同期)
+        - monochro/defect → pool/{color}/monochro/defect_pool/ (同期)
+        - color/good      → pool/{color}/color/good_pool/      (同期)
+        - color/defect    → pool/{color}/color/defect_pool/    (同期)
+
+        pool は export_root に同期する。付け替え・削除・invalid 化で export_root の対応クラスに
+        無くなった画像は pool から削除する。デコード失敗でスキップした画像は export_root に存在する
+        ため削除しない。export_root のそのクラスの画像が1枚も無いとき、metadata に無いカテゴリの
+        フォルダがあるとき、1クラスの削除が上限（既定 20% かつ 10 枚超。
+        `common.pool_sync_max_delete_ratio` で変更可）を超えるときは削除しない
+        （@.kiro/specs/retraining/pool-dataset-sync-split.md 決定3）。
 
         Args:
             modes: 処理対象 mode の iterable (既定 monochro+color)。
@@ -110,6 +122,8 @@ class DatasetManager:
         """
         color = str(self.target_color)
         export_root = self.cfg.common.export_root
+        max_ratio = float(self.cfg.common.get("pool_sync_max_delete_ratio",
+                                              POOL_SYNC_MAX_DELETE_RATIO))
         dataset_ids = {
             "monochro": self.cfg.common.dataset_id_monochro,
             "color": self.cfg.common.dataset_id_color,
@@ -126,20 +140,27 @@ class DatasetManager:
 
             category_map = self._load_category_map(export_root, dataset_id)
             binary_dir = self._resolve_binary_dir(export_root, dataset_id, color)
+            expected = {pool_good: set(), pool_defect: set()}
+            unknown_categories = []
 
             for category_id in sorted(os.listdir(binary_dir)):
                 category_dir = os.path.join(binary_dir, category_id)
                 if not os.path.isdir(category_dir):
                     continue
                 category = category_map.get(category_id)
-                if category is None or category.get("invalid_flg") == "1":
+                if category is None:
+                    unknown_categories.append(category_id)
+                    continue
+                if category.get("invalid_flg") == "1":
                     continue
                 dest = pool_good if category.get("on_class") == "0" else pool_defect
 
                 for f in sorted(os.listdir(category_dir)):
-                    if not f.lower().endswith(('.bmp', '.png', '.jpg', '.jpeg', '.tiff')):
+                    if not f.lower().endswith(IMAGE_EXTENSIONS):
                         continue
                     src = os.path.join(category_dir, f)
+                    normalized = self._normalize_export_filename(f)
+                    expected[dest].add(normalized.lower())
                     # 1 枚の破損 (0 byte / decode 失敗) で色番全体が落ちないよう個別捕捉してスキップ
                     try:
                         image_data = load_image_as_byte_array(src)
@@ -148,8 +169,33 @@ class DatasetManager:
                     except Exception as e:  # noqa: BLE001
                         print(f"⚠ [{mode}] スキップ {f}: {type(e).__name__}: {e}", flush=True)
                         continue
-                    normalized = self._normalize_export_filename(f)
                     self._copy_if_new(resized, os.path.join(dest, normalized))
+
+            if unknown_categories:
+                # metadata が古い・書き込み途中だと付け替え先を判定できないため、この mode は削除しない
+                print(f"⚠ [{mode}] metadata に無いカテゴリがあるため同期削除をスキップ: {unknown_categories}",
+                      flush=True)
+                expected = {}
+            for pool_dir, names in expected.items():
+                if not names:
+                    # export_root のクラスが空に見える場合（共有の同期途中・移動等）に pool を丸ごと消さない
+                    print(f"⚠ [{mode}] export_root に画像が無いため同期削除をスキップ: {pool_dir}",
+                          flush=True)
+                    continue
+                pool_files = [f for f in os.listdir(pool_dir)
+                              if f.lower().endswith(IMAGE_EXTENSIONS)]
+                # Windows はファイル名の大文字小文字を区別しないため小文字で比べる
+                stale = [f for f in pool_files if f.lower() not in names]
+                if (len(stale) > POOL_SYNC_MAX_DELETE_COUNT
+                        and len(stale) > max_ratio * len(pool_files)):
+                    print(f"⚠ [{mode}] 削除予定 {len(stale)}/{len(pool_files)} 枚が上限"
+                          f"（{max_ratio:.0%}）を超えるため同期削除をスキップ: {pool_dir}"
+                          f"（正当な付け替えなら common.pool_sync_max_delete_ratio を上げて再実行）",
+                          flush=True)
+                    continue
+                for f in stale:
+                    os.remove(os.path.join(pool_dir, f))
+                    print(f"🗑 [{mode}] export_root に無いため pool から削除: {f}", flush=True)
 
             print(f"✅ {mode}: export_root→pool 振り分け完了 (dataset_id={dataset_id})")
 
@@ -161,13 +207,14 @@ class DatasetManager:
             monochro: pool/{color}/monochro/{good,defect}_pool/ → dataset/{color}/monochro/...
 
         utils.split_manager.split_pool_to_train_test を使って pool を train/test に振り分ける。
-        既存の train/test データは保持し、pool のデータを差分追加する。
+        dataset は pool に同期する（行き先と違う側・pool に無い画像は削除。pool-dataset-sync-split.md 決定2）。
 
         Args:
             color: 色番号 (例: "841")
             mode: "color" or "monochro"
         Returns:
-            dict: 振り分け結果 {'good_to_train', 'good_to_test', 'defect_to_train', 'defect_to_test', 'files'}
+            dict: 振り分け結果 {'good_to_train', 'good_to_test', 'defect_to_train', 'defect_to_test',
+                'removed', 'files'}
         """
         if mode not in ("color", "monochro"):
             raise ValueError(f"unknown mode: {mode}")
